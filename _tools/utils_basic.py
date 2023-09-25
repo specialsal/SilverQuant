@@ -1,3 +1,4 @@
+import json
 import logging
 import pandas as pd
 
@@ -12,7 +13,7 @@ def pd_show_all() -> None:
     pd.set_option('display.float_format', lambda x: f'{x:.3f}')
 
 
-def logging_init(path=None, level=logging.DEBUG, file_line=True):
+def logging_init(path=None, level=logging.DEBUG, file_line=False):
     file_line_fmt = ""
     if file_line:
         file_line_fmt = "%(filename)s[line:%(lineno)d] - %(levelname)s: "
@@ -60,3 +61,27 @@ def symbol_to_code(symbol: str) -> str:
 
 def code_to_symbol(code: str) -> str:
     return code.split('.')[0]
+
+
+def load_json(path: str) -> dict:
+    try:
+        with open(path, 'r') as r:
+            ans = r.read()
+
+        return json.loads(ans)
+    except:
+        return {}
+
+
+def save_json(path: str, var: dict):
+    with open(path, 'w') as w:
+        w.write(json.dumps(var))
+
+
+if __name__ == '__main__':
+    # logging_init()
+    # logging.warning('123456')
+
+    save_json('./data/test.json', {'a': 1})
+    a = load_json('./data/test.json')
+    print(a)
