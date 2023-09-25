@@ -30,6 +30,10 @@ def callback_sub_whole(quotes: dict):
     curr_date = now.strftime("%Y%m%d")
     curr_time = now.strftime("%H:%M")
 
+    for symbol in quotes:
+        print(datetime.datetime.fromtimestamp(quotes[symbol]['time'] / 1000))
+        break
+
     if True:  # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
         read_date = load_json(path_dat)['date']
         new_day = False
