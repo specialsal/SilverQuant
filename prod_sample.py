@@ -31,7 +31,7 @@ def callback_sub_whole(quotes: dict):
     curr_time = now.strftime("%H:%M")
 
     for symbol in quotes:
-        print(datetime.datetime.fromtimestamp(quotes[symbol]['time'] / 1000))
+        print(curr_date, curr_time, datetime.datetime.fromtimestamp(quotes[symbol]['time'] / 1000))
         break
 
     if True:  # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
@@ -40,6 +40,7 @@ def callback_sub_whole(quotes: dict):
         if curr_date != read_date:
             save_json(path_dat, {'date': curr_date})
             new_day = True
+            print('New day started!')
 
     # 盘前
     if '09:15' <= curr_time <= '09:29':
