@@ -17,13 +17,10 @@ def save_json(path: str, var: dict):
         w.write(json.dumps(var))
 
 
-def logging_init(path=None, level=logging.DEBUG, file_line=True):
-    file_line_fmt = ""
-    if file_line:
-        file_line_fmt = "%(filename)s[line:%(lineno)d] - %(levelname)s: "
+def logging_init(path=None, level=logging.DEBUG):
     logging.basicConfig(
         level=level,
-        format=file_line_fmt + "%(asctime)s|%(message)s",
+        format="%(asctime)s | %(message)s",
         filename=path
     )
 
