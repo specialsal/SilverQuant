@@ -1,196 +1,132 @@
 import math
+import logging
 import datetime
-import backtrader as bt
-import pandas as pd
-from typing import List
+from types import SimpleNamespace
 
-from constant import *
-from _tools.utils_bt import bt_feed_pandas_datas
-from _tools.utils_basic import pd_show_all, logger_init
-
-
-pd_show_all()
-logger = logger_init('./_data/bt_sample_log.txt')
+from xtquant import xtdata
+from _tools.utils_basic import logging_init, load_json, save_json
+from _tools.xt_subscriber import sub_whole_quote
+# from _tools.xt_delegate import XtDelegate
 
 
-class MyStrategy(bt.Strategy):
-    params = dict(
-        max_count=10,
-        amount_each=10000,
-        hold_days=2,
-        take_profit=1.05,
-        stop_loss=0.97
-    )
+history_finding = {}  # 选股历史
 
-    def __init__(self):
-        self.my_position = {}
+p = SimpleNamespace(
+    max_count=10,  # 持股数量上限
+    hold_days=2,   # 持仓天数
+    amount_each=10000,  # 每个仓的价位
+    upper_income=1.05,  # 止盈率
+    lower_income=0.97,  # 止损率
+)
 
-    def next(self):
-        logger.error(f'===== {self.datas[0].datetime.datetime(0)} =====')
+path_his = './_cache/history.json'  # 记录选股历史
+path_pos = './_cache/my_position.json'  # 记录持仓
+path_dat = './_cache/curr_date.json'  # 用来确认是不是新的一天出现
 
-        sold_names = []
-        for name in self.my_position.keys():
-            # 所有持仓天数计数+1
-            self.my_position[name]['held'] += 1
 
-            data = self.getdatabyname(name)
-            held = self.my_position[name]['held']  # 已持有天数
-            cost = self.my_position[name]['cost']
-            volume = self.my_position[name]['volume']
+def callback_sub_whole(quotes: dict):
+    now = datetime.datetime.now()
+    curr_date = now.strftime("%Y%m%d")
+    curr_time = now.strftime("%H:%M")
 
-            sold = False
-            for i in range(1, self.p.hold_days + 1):
-                # 未达到止盈止损线则继续持有
-                if held == i and cost * self.p.stop_loss < data.high[0] < cost * self.p.take_profit:
-                    pass
+    for symbol in quotes:
+        print(curr_date, curr_time, datetime.datetime.fromtimestamp(quotes[symbol]['time'] / 1000))
+        break
 
-                # 止盈价卖出
-                elif held == i and data.high[0] >= cost * self.p.take_profit:
-                    self.sell(data, size=volume, price=cost * self.p.take_profit, info=[name, 'Take Profit'])
-                    sold = True
+    if True:  # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
+        read_date = load_json(path_dat)['date']
+        new_day = False
+        if curr_date != read_date:
+            save_json(path_dat, {'date': curr_date})
+            new_day = True
+            print('New day started!')
 
-                # 止损价卖出
-                elif held == i and data.low[0] <= cost * self.p.stop_loss:
-                    self.sell(data, size=volume, price=cost * self.p.stop_loss, info=[name, 'Stop Loss'])
-                    sold = True
+    # 盘前
+    if '09:15' <= curr_time <= '09:29':
+        # 新的一天决定是否要卖出持仓时间达标的股票
+        if new_day:
+            my_position = load_json(path_pos)
 
-            # 卖出持有 max_hold_day 天的
-            if held == self.p.hold_days and not sold:
-                self.sell(data, size=volume, price=data.close[0], info=[name, 'Hold Max'])
-                sold = True
+            sold_symbols = []
+            for symbol in my_position.keys():
+                # 所有持仓天数计数+1
+                my_position[symbol]['held'] += 1
+                # TODO: 达到 hold_days 的持仓卖掉
 
-            if sold:
-                sold_names.append(name)
+            for sold_symbol in sold_symbols:
+                del my_position[sold_symbol]
 
-        for sold_name in sold_names:
-            del self.my_position[sold_name]
+            save_json(path_pos, my_position)
+
+    # 盘中
+    if '09:30' <= curr_time <= '14:56':
+        my_position = load_json(path_pos)
+
+        # TODO: 确认止盈卖还是止损卖
 
         # 选股
         selections = []
-        for i in range(len(self.datas)):
-            open = self.datas[i].open[0]
-            last_price = self.datas[i].close[0]
-            last_close = self.datas[i].close[-1]
+        for symbol in quotes:
+            if symbol[:3] not in [
+                '000', '001',
+                '002', '003',
+                '300', '301',
+                '600', '601', '603', '605'
+            ]:
+                continue
 
-            if (open < last_close * 0.98) and (last_price > last_close * 1.02):
-                selections.append([i, self.datas[i]._name, last_price])
+            quote = quotes[symbol]
 
-        # 按照现价从小到大排序
-        selections = sorted(selections, key=lambda x: x[2])
+            last_close = quote['lastClose']
+            curr_open = quote['open']
+            curr_price = quote['lastPrice']
+
+            if (curr_open < last_close * 0.98) and (curr_price > last_close * 1.02):
+                if symbol not in my_position.keys():
+                    selections.append({'symbol': symbol, 'price': curr_price})
+
+        # 记录选股历史
+        if len(selections) > 0:
+            history = load_json(path_his)
+
+            if curr_date not in history.keys():
+                history[curr_date] = []
+
+            for selection in selections:
+                if selection not in history[curr_date]:
+                    history[curr_date].append(selection['symbol'])
+                    logging.info(f"select stock: {selection['symbol']}  price: {selection['price']}")
+            save_json(path_his, history)
+
+        # 选出的股票按照现价从小到大排序
+        selections = sorted(selections, key=lambda x: x["price"])
 
         # 如果仓不满，则补仓
-        buy_count = max(0, self.p.max_count - len(self.my_position.keys()))
-        buy_count = min(buy_count, len(selections))
-        if buy_count > 0:
-            for i in range(buy_count):
-                name = selections[i][1]
-                price = selections[i][2]
-                buy_volume = math.floor(self.p.amount_each / price / 100) * 100
+        buy_count = max(0, p.max_count - len(my_position.keys()))
+        buy_count = min(buy_count, len(selections))  # 确认筛选出来的数量
+        # buy_count = min(buy_count, broker.get_cash())  # TODO: 确认钱够用，不借贷
 
-                # 信号出现则以收盘价买入
-                cash = self.broker.get_cash()
-                if cash >= buy_volume * price:  # 确认钱够用，不借贷
-                    self.buy(self.getdatabyname(name), size=buy_volume, price=price, info=name)
-                    self.my_position[name] = {
-                        'held': 0,
-                        'cost': price,
-                        'volume': buy_volume,
-                    }
+        for i in range(buy_count):
+            symbol = selections[i]['symbol']
+            price = selections[i]['price']
+            buy_volume = math.floor(p.amount_each / price / 100) * 100
 
-    def log(self, msg, dt=None):
-        dt = dt or self.datas[0].datetime.date(0)
-        logger.info(f'{dt.isoformat()}, {msg}')
+            # TODO: 信号出现则以价格买入
 
-    def notify_order(self, order):
-        if order.status in [order.Completed]:
-            if order.isbuy():
-                self.log(f'Buy: Price %.2f\tVolume %.0f\tAmount %.2f\tCom %.2f {order.info}' %
-                         (order.executed.price,
-                          order.executed.size,
-                          order.executed.value,
-                          order.executed.comm))
-            elif order.issell():
-                self.log(f'Sell: Price %.2f\tVolume %.0f\tAmount %.2f\tCom %.2f {order.info}' %
-                         (order.executed.price,
-                          order.executed.size,
-                          order.executed.value,
-                          order.executed.comm))
+            logging.info(f"buy stock: {symbol} size:{buy_volume} price:{price}")
+            my_position[symbol] = {
+                'held': 0,
+                'cost': price,
+                'volume': buy_volume,
+            }
+            save_json(path_pos, my_position)
 
-        # elif order.status in [order.Canceled, order.Margin, order.Rejected]:
-        #     self.log('Order Failed')
-        #
-        # elif order.status in [order.Submitted, order.Accepted, order.Partial]:
-        #     self.log('Order Status: %s' % order.Status[order.status])
-
-
-def checker(df: pd.DataFrame):
-    return True
-
-
-def run_backtest(
-    symbols: List[str],
-    start_date: datetime.datetime,
-    end_date: datetime.datetime,
-):
-    cerebro = bt.Cerebro()
-
-    start_cash = 100000
-    cerebro.broker.setcash(start_cash)
-    cerebro.broker.setcommission(commission=0.0001)
-
-    t1 = datetime.datetime.now()
-    all_suc = bt_feed_pandas_datas(
-        cerebro,
-        symbols,
-        start_date,
-        end_date,
-        check=checker,
-        data_source=DataSource.XTDATA,
-    )
-    cerebro.addstrategy(MyStrategy)
-    print(f'All succeed: {all_suc}')
-
-    t2 = datetime.datetime.now()
-    cerebro.run()  # 运行回测系统
-
-    t3 = datetime.datetime.now()
-    end_value = cerebro.broker.getvalue()  # 获取回测结束后的总资金
-    end_cash = cerebro.broker.getcash()  # 获取回测结束后的总资金
-    pnl = end_value - start_cash  # 盈亏统计
-
-    print(f"Start asset: {start_cash}")
-    print(f"End asset: {round(end_value, 2)}")
-    print(f"Net Benefit: {round(pnl, 2)}")
-    print(f"End asset: {round(end_cash, 2)}")
-
-    print(f"feed datas use: {t2 - t1}")
-    print(f"simulation use: {t3 - t2}")
-
-    figure = cerebro.plot(style='candlebars')[0][0]
-    figure.savefig('./_data/bt_sample_log.png')
+    # 盘后
+    if '14:57' <= curr_time <= '15:00':
+        pass
 
 
 if __name__ == '__main__':
-    # symbol_list = [
-    #     '000001',
-    #     '000002',
-    #     '000003',
-    #     '000004',
-    # ]
-
-    from _tools.utils_cache import get_all_historical_symbols
-    symbol_list = []
-    for symbol in get_all_historical_symbols():
-        if symbol[:3] in [
-            '000', '001',
-            # '002', '003'
-            # '300', '301',
-            '600', '601', '603', '605'
-        ]:
-            symbol_list.append(symbol)
-
-    run_backtest(
-        symbol_list,
-        start_date=datetime.datetime(2020, 7, 1),
-        end_date=datetime.datetime(2023, 7, 1),
-    )
+    logging_init()
+    sub_whole_quote(callback_sub_whole)
+    xtdata.run()  # 死循环 阻塞主线程退出
