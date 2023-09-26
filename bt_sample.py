@@ -93,7 +93,7 @@ def callback_sub_whole(quotes: dict):
                 history[curr_date] = []
 
             for selection in selections:
-                if selection not in history[curr_date]:
+                if selection['symbol'] not in history[curr_date]:
                     history[curr_date].append(selection['symbol'])
                     logging.info(f"select stock: {selection['symbol']}  price: {selection['price']}")
             save_json(path_his, history)
