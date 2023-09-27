@@ -67,15 +67,16 @@ def load_json(path: str) -> dict:
     try:
         with open(path, 'r') as r:
             ans = r.read()
-
         return json.loads(ans)
     except:
+        with open(path, 'w') as w:
+            w.write('{}')
         return {}
 
 
 def save_json(path: str, var: dict):
     with open(path, 'w') as w:
-        w.write(json.dumps(var))
+        w.write(json.dumps(var, indent=4))
 
 
 if __name__ == '__main__':
