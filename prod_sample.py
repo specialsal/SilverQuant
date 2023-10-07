@@ -1,28 +1,28 @@
 import math
 import logging
 import datetime
-from types import SimpleNamespace
 
 from xtquant import xtdata, xtconstant
 from _tools.utils_basic import logging_init, load_json, save_json, symbol_to_code
 from _tools.xt_subscriber import sub_whole_quote
 from _tools.xt_delegate import XtDelegate
 
+strategy_name = "低开翻红策略"
 
-p = SimpleNamespace(
-    max_count=10,  # 持股数量上限
-    hold_days=2,   # 持仓天数
-    amount_each=10000,  # 每个仓的价位
-    upper_income=1.05,  # 止盈率
-    lower_income=0.97,  # 止损率
-)
-
-path_his = './_cache/history.json'  # 记录选股历史
-path_pos = './_cache/my_position.json'  # 记录持仓
-path_dat = './_cache/curr_date.json'  # 用来确认是不是新的一天出现
-
+path_his = './_cache/prod/history.json'  # 记录选股历史
+path_pos = './_cache/prod/my_position.json'  # 记录持仓
+path_dat = './_cache/prod/curr_date.json'  # 用来确认是不是新的一天出现
 
 xt_delegate = XtDelegate()
+
+
+class p:
+    max_count = 10          # 持股数量上限
+    hold_days = 2           # 持仓天数
+    amount_each = 10000     # 每个仓的资金上限
+    upper_income = 1.25     # 止盈率
+    stop_income = 1.05      # 止持仓上限
+    lower_income = 0.95     # 止损率
 
 
 def callback_sub_whole(quotes: dict):
@@ -30,19 +30,97 @@ def callback_sub_whole(quotes: dict):
     curr_date = now.strftime("%Y%m%d")
     curr_time = now.strftime("%H:%M")
 
-    for symbol in quotes:
-        print(curr_date, curr_time, datetime.datetime.fromtimestamp(quotes[symbol]['time'] / 1000))
-        break
+    print(".", end='')
+
+    # for symbol in quotes:
+    #     print(curr_date, curr_time, datetime.datetime.fromtimestamp(quotes[symbol]['time'] / 1000))
+    #     break
+
+    # 盘前
+    if '09:15' <= curr_time <= '09:29':
+        if True:  # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
+            new_day = False
+            read_date = load_json(path_dat)
+            if 'date' not in read_date.keys() or curr_date != read_date['date']:
+                save_json(path_dat, {'date': curr_date})
+                new_day = True
+                print('New day started!')
+
+        # 新的一天决定是否要卖出持仓时间达标的股票
+        if new_day:
+            my_position = load_json(path_pos)
+
+            sold_codes = []
+            for code in my_position.keys():
+                # 所有持仓天数计数+1
+                my_position[code]['held'] += 1
+
+                if my_position[code]['held'] > p.hold_days:
+                    # 达到 hold_days，但是不满足 5% 盈利的持仓平仓
+
+                    xt_delegate.order_submit(
+                        stock_code=code,
+                        order_type=xtconstant.STOCK_SELL,
+                        order_volume=my_position[code]['volume'],
+                        price_type=xtconstant.LATEST_PRICE,
+                        price=-1,
+                        strategy_name=strategy_name,
+                        order_remark=f'持仓超过{p.hold_days}天卖出',
+                    )
+                    sold_codes.append(code)
+
+            for sold_code in sold_codes:
+                del my_position[sold_code]
+
+            save_json(path_pos, my_position)
 
     # 早盘
-    if '09:30' <= curr_time <= '11:30':
-        # TODO: 确认止盈卖还是止损卖
+    elif '09:30' <= curr_time <= '11:30':
+
+        # 止盈止损卖出
         my_position = load_json(path_pos)
+        sold_codes = []
+        for code in my_position.keys():
+            quote = quotes[code]
+            curr_price = quote['lastPrice']
+            cost = my_position[code]['cost']
+
+
+            if curr_price / cost >= p.upper_income:
+                # 止盈卖出
+                xt_delegate.order_submit(
+                    stock_code=code,
+                    order_type=xtconstant.STOCK_SELL,
+                    order_volume=my_position[code]['volume'],
+                    price_type=xtconstant.LATEST_PRICE,
+                    price=-1,
+                    strategy_name=strategy_name,
+                    order_remark=f'止盈 {p.upper_income} 倍卖出',
+                )
+                sold_codes.append(code)
+            elif curr_price / cost <= p.lower_income:
+                # 止损卖出
+                xt_delegate.order_submit(
+                    stock_code=code,
+                    order_type=xtconstant.STOCK_SELL,
+                    order_volume=my_position[code]['volume'],
+                    price_type=xtconstant.LATEST_PRICE,
+                    price=-1,
+                    strategy_name='my_strategy',
+                    order_remark=f'止损 {p.upper_income} 倍卖出',
+                )
+                sold_codes.append(code)
+
+        for sold_code in sold_codes:
+            del my_position[sold_code]
+
+        if len(sold_codes) > 0:
+            save_json(path_pos, my_position)
 
         # 选股
         selections = []
-        for symbol in quotes:
-            if symbol[:3] not in [
+        for code in quotes:
+            if code[:3] not in [
                 '000', '001',
                 '002', '003',
                 '300', '301',
@@ -50,15 +128,16 @@ def callback_sub_whole(quotes: dict):
             ]:
                 continue
 
-            quote = quotes[symbol]
+            quote = quotes[code]
 
             last_close = quote['lastClose']
             curr_open = quote['open']
             curr_price = quote['lastPrice']
 
             if (curr_open < last_close * 0.98) and (curr_price > last_close * 1.02):
-                if symbol not in my_position.keys():
-                    selections.append({'symbol': symbol, 'price': curr_price})
+                if code not in my_position.keys():
+                    # 如果未持仓则记录
+                    selections.append({'symbol': code, 'price': curr_price})
 
         # 记录选股历史
         if len(selections) > 0:
@@ -82,26 +161,25 @@ def callback_sub_whole(quotes: dict):
         # buy_count = min(buy_count, broker.get_cash())  # TODO: 确认钱够用，不借贷
 
         for i in range(buy_count):
-            symbol = selections[i]['symbol']
+            code = selections[i]['symbol']
             price = selections[i]['price']
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
-            # TODO: 信号出现则以价格买入
-            logging.info(f"buy stock: {symbol} size:{buy_volume} price:{price}")
+            # 信号出现则以价格买入
+            logging.info(f"buy stock: {code} size:{buy_volume} price:{price}")
             xt_delegate.order_submit(
-                stock_code=symbol_to_code(symbol),
+                stock_code=symbol_to_code(code),
                 order_type=xtconstant.STOCK_BUY,
                 order_volume=buy_volume,
                 price_type=xtconstant.FIX_PRICE,
                 price=price,
                 strategy_name='strategy_name',
-                order_remark=f'{symbol} buy',
+                order_remark=f'{code} 符合条件买入 {buy_volume}',
             )
 
             # 记录持仓变化
-            # TODO: 处理买入同一只股票的情况
             my_position = load_json(path_pos)
-            my_position[symbol] = {
+            my_position[code] = {
                 'held': 0,
                 'cost': price,
                 'volume': buy_volume,
@@ -111,31 +189,6 @@ def callback_sub_whole(quotes: dict):
     # # 午盘
     # elif '13:00' <= curr_time <= '14:56':
     #     pass
-
-    # 盘前
-    elif '09:15' <= curr_time <= '09:29':
-        if True:  # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
-            new_day = False
-            read_date = load_json(path_dat)
-            if 'date' not in read_date.keys() or curr_date != read_date['date']:
-                save_json(path_dat, {'date': curr_date})
-                new_day = True
-                print('New day started!')
-
-        # 新的一天决定是否要卖出持仓时间达标的股票
-        if new_day:
-            my_position = load_json(path_pos)
-
-            sold_symbols = []
-            for symbol in my_position.keys():
-                # 所有持仓天数计数+1
-                my_position[symbol]['held'] += 1
-                # TODO: 达到 hold_days，但是不满足5%盈利的持仓平仓
-
-            for sold_symbol in sold_symbols:
-                del my_position[sold_symbol]
-
-            save_json(path_pos, my_position)
 
     # 盘后
     elif '14:57' <= curr_time <= '15:00':
