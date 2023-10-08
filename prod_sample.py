@@ -40,7 +40,8 @@ def callback_sub_whole(quotes: dict):
 
     # 盘前
     if '09:15' <= curr_time <= '09:29':
-        if True:  # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
+        # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
+        if True:
             new_day = False
             read_date = load_json(path_dat)
             if 'date' not in read_date.keys() or curr_date != read_date['date']:
@@ -58,20 +59,25 @@ def callback_sub_whole(quotes: dict):
                 my_position[code]['held'] += 1
 
                 if my_position[code]['held'] > p.hold_days:
-                    # 达到 hold_days，但是不满足 5% 盈利的持仓平仓
-                    sell_volume = my_position[code]['volume']
+                    # 达到 hold_days
+                    quote = quotes[code]
+                    curr_price = quote['lastPrice']
+                    cost = my_position[code]['cost']
+                    if curr_price < cost * p.stop_income:
+                        # 不满足 5% 盈利的持仓平仓
+                        sell_volume = my_position[code]['volume']
 
-                    logging.info(f"换仓 stock: {code} size:{sell_volume}")
-                    xt_delegate.order_submit(
-                        stock_code=code,
-                        order_type=xtconstant.STOCK_SELL,
-                        order_volume=sell_volume,
-                        price_type=xtconstant.LATEST_PRICE,
-                        price=-1,
-                        strategy_name=strategy_name,
-                        order_remark=f'持仓超过{p.hold_days}天卖出',
-                    )
-                    sold_codes.append(code)
+                        logging.info(f"换仓 stock: {code} size:{sell_volume}")
+                        xt_delegate.order_submit(
+                            stock_code=code,
+                            order_type=xtconstant.STOCK_SELL,
+                            order_volume=sell_volume,
+                            price_type=xtconstant.LATEST_PRICE,
+                            price=-1,
+                            strategy_name=strategy_name,
+                            order_remark=f'持仓超过{p.hold_days}天卖出',
+                        )
+                        sold_codes.append(code)
 
             for sold_code in sold_codes:
                 del my_position[sold_code]
