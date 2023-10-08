@@ -17,11 +17,11 @@ xt_delegate = XtDelegate()
 
 
 class p:
-    max_count = 10          # 持股数量上限
     hold_days = 2           # 持仓天数
+    max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
+    stop_income = 1.05      # 换仓阈值
     upper_income = 1.25     # 止盈率
-    stop_income = 1.05      # 止持仓上限
     lower_income = 0.95     # 止损率
     low_open = 0.98         # 低开阈值
     turn_red = 1.02         # 翻红阈值
@@ -96,7 +96,7 @@ def callback_sub_whole(quotes: dict):
             cost = my_position[code]['cost']
             sell_volume = my_position[code]['volume']
 
-            if curr_price / cost >= p.upper_income:
+            if curr_price >= cost * p.upper_income:
                 # 止盈卖出
                 logging.info(f"止盈 stock: {code} size:{sell_volume} price:{curr_price}")
                 xt_delegate.order_submit(
@@ -109,7 +109,7 @@ def callback_sub_whole(quotes: dict):
                     order_remark=f'止盈 {p.upper_income} 倍卖出',
                 )
                 sold_codes.append(code)
-            elif curr_price / cost <= p.lower_income:
+            elif curr_price <= cost * p.lower_income:
                 # 止损卖出
                 logging.info(f"止损 stock: {code} size:{sell_volume} price:{curr_price}")
                 xt_delegate.order_submit(
