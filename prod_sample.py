@@ -23,6 +23,8 @@ class p:
     upper_income = 1.25     # 止盈率
     stop_income = 1.05      # 止持仓上限
     lower_income = 0.95     # 止损率
+    low_open = 0.98         # 低开阈值
+    turn_red = 1.02         # 翻红阈值
 
 
 def callback_sub_whole(quotes: dict):
@@ -57,11 +59,13 @@ def callback_sub_whole(quotes: dict):
 
                 if my_position[code]['held'] > p.hold_days:
                     # 达到 hold_days，但是不满足 5% 盈利的持仓平仓
+                    sell_volume = my_position[code]['volume']
 
+                    logging.info(f"换仓 stock: {code} size:{sell_volume}")
                     xt_delegate.order_submit(
                         stock_code=code,
                         order_type=xtconstant.STOCK_SELL,
-                        order_volume=my_position[code]['volume'],
+                        order_volume=sell_volume,
                         price_type=xtconstant.LATEST_PRICE,
                         price=-1,
                         strategy_name=strategy_name,
@@ -84,14 +88,15 @@ def callback_sub_whole(quotes: dict):
             quote = quotes[code]
             curr_price = quote['lastPrice']
             cost = my_position[code]['cost']
-
+            sell_volume = my_position[code]['volume']
 
             if curr_price / cost >= p.upper_income:
                 # 止盈卖出
+                logging.info(f"止盈 stock: {code} size:{sell_volume} price:{curr_price}")
                 xt_delegate.order_submit(
                     stock_code=code,
                     order_type=xtconstant.STOCK_SELL,
-                    order_volume=my_position[code]['volume'],
+                    order_volume=sell_volume,
                     price_type=xtconstant.LATEST_PRICE,
                     price=-1,
                     strategy_name=strategy_name,
@@ -100,10 +105,11 @@ def callback_sub_whole(quotes: dict):
                 sold_codes.append(code)
             elif curr_price / cost <= p.lower_income:
                 # 止损卖出
+                logging.info(f"止损 stock: {code} size:{sell_volume} price:{curr_price}")
                 xt_delegate.order_submit(
                     stock_code=code,
                     order_type=xtconstant.STOCK_SELL,
-                    order_volume=my_position[code]['volume'],
+                    order_volume=sell_volume,
                     price_type=xtconstant.LATEST_PRICE,
                     price=-1,
                     strategy_name='my_strategy',
@@ -134,7 +140,7 @@ def callback_sub_whole(quotes: dict):
             curr_open = quote['open']
             curr_price = quote['lastPrice']
 
-            if (curr_open < last_close * 0.98) and (curr_price > last_close * 1.02):
+            if (curr_open < last_close * p.low_open) and (curr_price > last_close * p.turn_red):
                 if code not in my_position.keys():
                     # 如果未持仓则记录
                     selections.append({'symbol': code, 'price': curr_price})
@@ -166,7 +172,7 @@ def callback_sub_whole(quotes: dict):
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
             # 信号出现则以价格买入
-            logging.info(f"buy stock: {code} size:{buy_volume} price:{price}")
+            logging.info(f"买入 stock: {code} size:{buy_volume} price:{price}")
             xt_delegate.order_submit(
                 stock_code=symbol_to_code(code),
                 order_type=xtconstant.STOCK_BUY,
