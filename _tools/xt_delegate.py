@@ -6,28 +6,35 @@ from xtquant import xtconstant
 from xtquant.xttrader import XtQuantTrader, XtQuantTraderCallback
 from xtquant.xttype import StockAccount, \
     XtOrder, XtTrade, \
-    XtOrderError, XtCancelError,\
+    XtOrderError, XtCancelError, \
     XtOrderResponse, XtCancelOrderResponse, \
     XtAccountStatus
 
 
+default_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
+default_account_id = '55009728'
+
+
 class XtDelegate:
-    def __init__(self, account: StockAccount = None):
-        self.path = r'C:\国金QMT交易端模拟\userdata_mini'
-
-        if account is None:
-            account = StockAccount('55009728', 'STOCK')
-        self.account = account
-
+    def __init__(self, account_id: StockAccount = None, path: str = None):
         self.xt_trader = None
 
+        if path is None:
+            path = default_client_path
+        self.path = path
+
+        if account_id is None:
+            account_id = default_account_id
+        self.account = StockAccount(account_id=account_id, account_type='STOCK')
+
         self.connect()
+        # 保证QMT持续连接
         Thread(target=self.keep_connected).start()
 
     def connect(self) -> (XtQuantTrader, bool):
-        print("Connecting...")
+        print("连接中...")
         session_id = int(time.time())  # 生成session id 整数类型 同时运行的策略不能重复
-        print("Generate session_id: ", session_id)
+        print("生成临时 session_id: ", session_id)
         self.xt_trader = XtQuantTrader(self.path, session_id)
 
         xt_callback = XtCallback(self)
@@ -55,9 +62,9 @@ class XtDelegate:
             _, success = self.connect()
             if success:
                 print('交易接口重连成功')
-        else:
-            # print('无需重连交易接口')
-            pass
+        # else:
+        #     print('无需重连交易接口')
+        #     pass
 
     def keep_connected(self) -> None:
         while True:
@@ -65,14 +72,14 @@ class XtDelegate:
             self.reconnect()
 
     def order_submit(
-        self,
-        stock_code: str,
-        order_type: int,
-        order_volume: int,
-        price_type: int,
-        price: float,
-        strategy_name: str,
-        order_remark: str,
+            self,
+            stock_code: str,
+            order_type: int,
+            order_volume: int,
+            price_type: int,
+            price: float,
+            strategy_name: str,
+            order_remark: str,
     ) -> bool:
         if self.xt_trader is not None:
 
@@ -132,85 +139,57 @@ class XtDelegate:
 
 
 class XtCallback(XtQuantTraderCallback):
-    def __init__(
-        self,
-        delegate: XtDelegate,
-    ):
+    def __init__(self, delegate: XtDelegate):
         self.delegate = delegate
-        # self.future_normal = asyncio.Future()
-        # self.future_error = asyncio.Future()
 
     def on_disconnected(self):
         print(
             datetime.datetime.now(),
-            "qmt connection lost, reconnecting..."
+            '连接丢失，断线重连中...'
         )
         self.delegate.xt_trader = None
 
     def on_stock_order(self, order: XtOrder):
-        # self.future_normal.set_result(order.order_remark)
         print(
             datetime.datetime.now(),
-            '委托回调',
+            f'委托回调 id:{order.order_id} sysid:{order.order_sysid} remark:{order.order_remark}',
         )
-        print(order.order_remark)
-        print(order.order_status)
-        print(order.order_id)
-        self.delegate.order_cancel(order.order_id)
 
     def on_stock_trade(self, trade: XtTrade):
         print(
             datetime.datetime.now(),
-            '成交回调',
+            f'成交回调 id:{trade.order_id} sysid:{trade.order_sysid} remark:{trade.order_remark}',
         )
-        print(trade.order_id)
-        print(trade.order_sysid)
-        print(trade.order_remark)
 
     def on_order_stock_async_response(self, response: XtOrderResponse):
         print(
             datetime.datetime.now(),
-            "异步委托回调",
+            f'异步委托回调 id:{response.order_id} sysid:{response.error_msg} remark:{response.order_remark}',
         )
-        print(response.order_remark)
 
     def on_cancel_order_stock_async_response(self, response: XtCancelOrderResponse):
         print(
             datetime.datetime.now(),
-            "异步撤单回调",
+            f'异步撤单回调 id:{response.order_id} sysid:{response.order_sysid} result:{response.cancel_result}',
         )
-        print(response)
 
     def on_order_error(self, order_error: XtOrderError):
         print(
             datetime.datetime.now(),
-            "委托报错回调",
+            f'委托报错回调 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}',
         )
-        print(order_error.error_msg)
-        print(order_error.order_remark)
 
     def on_cancel_error(self, cancel_error: XtCancelError):
         print(
             datetime.datetime.now(),
-            "撤单报错回调"
+            f'撤单报错回调 id:{cancel_error.order_id} error_id:{cancel_error.error_id} error_msg:{cancel_error.error_msg}',
         )
-        print(cancel_error.error_msg)
-        print(cancel_error.error_id)
-        print(cancel_error.order_id)
 
     def on_account_status(self, status: XtAccountStatus):
         print(
             datetime.datetime.now(),
-            "账号查询回调",
+            f'账号查询回调: id:{status.account_id} type:{status.account_type} status:{status.status} ',
         )
-        print(status.account_type)
-        print(status.account_id)
-        print(status.status)
-
-
-def test_delegate(delegate: XtDelegate):
-    while True:
-        time.sleep(5)
 
 
 if __name__ == '__main__':
@@ -222,13 +201,13 @@ if __name__ == '__main__':
 
         time.sleep(1)
         xt_delegate.order_submit(
-            '000001.SZ',
-            xtconstant.STOCK_BUY,
-            100,
-            xtconstant.LATEST_PRICE,
-            -1,
-            'strategy_name',
-            '000001.SZ action',
+            stock_code='000001.SZ',
+            order_type=xtconstant.STOCK_BUY,
+            order_volume=100,
+            price_type=xtconstant.LATEST_PRICE,
+            price=-1,
+            strategy_name='strategy_name',
+            order_remark='000001.SZ action',
         )
 
         xt_delegate.xt_trader.run_forever()
