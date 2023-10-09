@@ -152,13 +152,13 @@ class XtCallback(XtQuantTraderCallback):
     def on_stock_order(self, order: XtOrder):
         print(
             datetime.datetime.now(),
-            f'委托回调 id:{order.order_id} sysid:{order.order_sysid} remark:{order.order_remark}',
+            f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
         )
 
     def on_stock_trade(self, trade: XtTrade):
         print(
             datetime.datetime.now(),
-            f'成交回调 id:{trade.order_id} sysid:{trade.order_sysid} remark:{trade.order_remark}',
+            f'成交回调 id:{trade.order_id} code:{trade.stock_code} remark:{trade.order_remark}',
         )
 
     def on_order_stock_async_response(self, response: XtOrderResponse):
