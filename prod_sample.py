@@ -49,86 +49,77 @@ def callback_sub_whole(quotes: dict):
                 new_day = True
                 print('New day started!')
 
-        # 新的一天决定是否要卖出持仓时间达标的股票
         if new_day:
             my_position = load_json(path_pos)
 
-            sold_codes = []
+            # 所有持仓天数计数+1
             for code in my_position.keys():
-                # 所有持仓天数计数+1
                 my_position[code]['held'] += 1
-
-                # if my_position[code]['held'] > p.hold_days:
-                #     # 达到 hold_days
-                #     quote = quotes[code]
-                #     curr_price = quote['lastPrice']
-                #     cost = my_position[code]['cost']
-                #     if curr_price < cost * p.stop_income:
-                #         # 不满足 5% 盈利的持仓平仓
-                #         sell_volume = my_position[code]['volume']
-                #
-                #         logging.info(f"换仓 stock: {code} size:{sell_volume}")
-                #         xt_delegate.order_submit(
-                #             stock_code=code,
-                #             order_type=xtconstant.STOCK_SELL,
-                #             order_volume=sell_volume,
-                #             price_type=xtconstant.LATEST_PRICE,
-                #             price=-1,
-                #             strategy_name=strategy_name,
-                #             order_remark=f'持仓超过{p.hold_days}天卖出',
-                #         )
-                #         sold_codes.append(code)
-
-            for sold_code in sold_codes:
-                del my_position[sold_code]
 
             save_json(path_pos, my_position)
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
 
-        # 止盈止损卖出
+        # 卖出逻辑
         my_position = load_json(path_pos)
         sold_codes = []
         for code in my_position.keys():
-            # TODO: 判断持仓超过一天
-            quote = quotes[code]
-            curr_price = quote['lastPrice']
-            cost = my_position[code]['cost']
-            sell_volume = my_position[code]['volume']
+            if code in quotes.keys():
+                quote = quotes[code]
+                curr_price = quote['lastPrice']
+                cost = my_position[code]['cost']
 
-            if curr_price >= cost * p.upper_income:
-                # 止盈卖出
-                logging.info(f"止盈 stock: {code} size:{sell_volume} price:{curr_price}")
-                xt_delegate.order_submit(
-                    stock_code=code,
-                    order_type=xtconstant.STOCK_SELL,
-                    order_volume=sell_volume,
-                    price_type=xtconstant.LATEST_PRICE,
-                    price=-1,
-                    strategy_name=strategy_name,
-                    order_remark=f'止盈 {p.upper_income} 倍卖出',
-                )
-                sold_codes.append(code)
-            elif curr_price <= cost * p.lower_income:
-                # 止损卖出
-                logging.info(f"止损 stock: {code} size:{sell_volume} price:{curr_price}")
-                xt_delegate.order_submit(
-                    stock_code=code,
-                    order_type=xtconstant.STOCK_SELL,
-                    order_volume=sell_volume,
-                    price_type=xtconstant.LATEST_PRICE,
-                    price=-1,
-                    strategy_name='my_strategy',
-                    order_remark=f'止损 {p.upper_income} 倍卖出',
-                )
-                sold_codes.append(code)
+                if my_position[code]['held'] > 0:  # 判断持仓超过一天
+                    if curr_price >= cost * p.upper_income:
+                        # 止盈卖出
+                        sell_volume = my_position[code]['volume']
+                        logging.info(f"止盈 stock: {code} size:{sell_volume} price:{curr_price}")
+                        xt_delegate.order_submit(
+                            stock_code=code,
+                            order_type=xtconstant.STOCK_SELL,
+                            order_volume=sell_volume,
+                            price_type=xtconstant.LATEST_PRICE,
+                            price=-1,
+                            strategy_name=strategy_name,
+                            order_remark=f'止盈 {p.upper_income} 倍卖出',
+                        )
+                        sold_codes.append(code)
+                    elif curr_price <= cost * p.lower_income:
+                        # 止损卖出
+                        sell_volume = my_position[code]['volume']
+                        logging.info(f"止损 stock: {code} size:{sell_volume} price:{curr_price}")
+                        xt_delegate.order_submit(
+                            stock_code=code,
+                            order_type=xtconstant.STOCK_SELL,
+                            order_volume=sell_volume,
+                            price_type=xtconstant.LATEST_PRICE,
+                            price=-1,
+                            strategy_name='my_strategy',
+                            order_remark=f'止损 {p.upper_income} 倍卖出',
+                        )
+                        sold_codes.append(code)
+                elif my_position[code]['held'] > p.hold_days:
+                    if curr_price < cost * p.stop_income:
+                        # 不满足 5% 盈利的持仓平仓
+                        sell_volume = my_position[code]['volume']
+                        logging.info(f"换仓 stock: {code} size:{sell_volume}")
+                        xt_delegate.order_submit(
+                            stock_code=code,
+                            order_type=xtconstant.STOCK_SELL,
+                            order_volume=sell_volume,
+                            price_type=xtconstant.LATEST_PRICE,
+                            price=-1,
+                            strategy_name=strategy_name,
+                            order_remark=f'持仓超过{p.hold_days}天卖出',
+                        )
+                        sold_codes.append(code)
 
-        for sold_code in sold_codes:
-            del my_position[sold_code]
+            for sold_code in sold_codes:
+                del my_position[sold_code]
 
-        if len(sold_codes) > 0:
-            save_json(path_pos, my_position)
+            if len(sold_codes) > 0:
+                save_json(path_pos, my_position)
 
         # 选股
         selections = []
@@ -178,7 +169,7 @@ def callback_sub_whole(quotes: dict):
             price = selections[i]['price']
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
-            # 信号出现则以价格买入
+            # 如果有可用的买点则买入
             logging.info(f"买入 stock: {code} size:{buy_volume} price:{price}")
             xt_delegate.order_submit(
                 stock_code=symbol_to_code(code),
