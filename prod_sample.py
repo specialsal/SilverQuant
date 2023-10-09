@@ -58,26 +58,26 @@ def callback_sub_whole(quotes: dict):
                 # 所有持仓天数计数+1
                 my_position[code]['held'] += 1
 
-                if my_position[code]['held'] > p.hold_days:
-                    # 达到 hold_days
-                    quote = quotes[code]
-                    curr_price = quote['lastPrice']
-                    cost = my_position[code]['cost']
-                    if curr_price < cost * p.stop_income:
-                        # 不满足 5% 盈利的持仓平仓
-                        sell_volume = my_position[code]['volume']
-
-                        logging.info(f"换仓 stock: {code} size:{sell_volume}")
-                        xt_delegate.order_submit(
-                            stock_code=code,
-                            order_type=xtconstant.STOCK_SELL,
-                            order_volume=sell_volume,
-                            price_type=xtconstant.LATEST_PRICE,
-                            price=-1,
-                            strategy_name=strategy_name,
-                            order_remark=f'持仓超过{p.hold_days}天卖出',
-                        )
-                        sold_codes.append(code)
+                # if my_position[code]['held'] > p.hold_days:
+                #     # 达到 hold_days
+                #     quote = quotes[code]
+                #     curr_price = quote['lastPrice']
+                #     cost = my_position[code]['cost']
+                #     if curr_price < cost * p.stop_income:
+                #         # 不满足 5% 盈利的持仓平仓
+                #         sell_volume = my_position[code]['volume']
+                #
+                #         logging.info(f"换仓 stock: {code} size:{sell_volume}")
+                #         xt_delegate.order_submit(
+                #             stock_code=code,
+                #             order_type=xtconstant.STOCK_SELL,
+                #             order_volume=sell_volume,
+                #             price_type=xtconstant.LATEST_PRICE,
+                #             price=-1,
+                #             strategy_name=strategy_name,
+                #             order_remark=f'持仓超过{p.hold_days}天卖出',
+                #         )
+                #         sold_codes.append(code)
 
             for sold_code in sold_codes:
                 del my_position[sold_code]
@@ -91,6 +91,7 @@ def callback_sub_whole(quotes: dict):
         my_position = load_json(path_pos)
         sold_codes = []
         for code in my_position.keys():
+            # TODO: 判断持仓超过一天
             quote = quotes[code]
             curr_price = quote['lastPrice']
             cost = my_position[code]['cost']
