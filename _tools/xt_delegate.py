@@ -72,14 +72,14 @@ class XtDelegate:
             self.reconnect()
 
     def order_submit(
-            self,
-            stock_code: str,
-            order_type: int,
-            order_volume: int,
-            price_type: int,
-            price: float,
-            strategy_name: str,
-            order_remark: str,
+        self,
+        stock_code: str,
+        order_type: int,
+        order_volume: int,
+        price_type: int,
+        price: float,
+        strategy_name: str,
+        order_remark: str,
     ) -> bool:
         if self.xt_trader is not None:
 
