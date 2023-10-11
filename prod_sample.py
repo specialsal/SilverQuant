@@ -204,7 +204,6 @@ def callback_sub_whole(quotes: dict):
             }
             save_json(path_pos, my_position)
 
-
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
         scan_sell(quotes)
