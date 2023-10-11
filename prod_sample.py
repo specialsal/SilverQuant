@@ -30,6 +30,70 @@ class p:
     turn_red_lower = 1.02  # 翻红阈值下限
 
 
+def scan_sell(quotes: dict):
+    # 卖出逻辑
+    my_position = load_json(path_pos)
+    sold_codes = []
+    for code in my_position.keys():
+        if code in quotes.keys():
+            quote = quotes[code]
+            curr_price = quote['lastPrice']
+            cost = my_position[code]['cost']
+
+            if my_position[code]['held'] > p.hold_days:  # 判断持仓超过限制
+                if curr_price < cost * p.stop_income:
+                    # 不满足 5% 盈利的持仓平仓
+                    sell_volume = my_position[code]['volume']
+                    logging.warning(f'换仓 code: {code} size:{sell_volume}')
+                    xt_delegate.order_submit(
+                        stock_code=code,
+                        order_type=xtconstant.STOCK_SELL,
+                        order_volume=sell_volume,
+                        price_type=xtconstant.LATEST_PRICE,
+                        price=-1,
+                        strategy_name=strategy_name,
+                        order_remark=f'超{p.hold_days}天卖出',
+                    )
+                    sold_codes.append(code)
+            elif my_position[code]['held'] > 0:  # 判断持仓超过一天
+                if curr_price >= cost * p.upper_income:
+                    # 止盈卖出
+                    sell_volume = my_position[code]['volume']
+                    logging.warning(f'止盈 code: {code} size:{sell_volume} price:{curr_price}')
+                    xt_delegate.order_submit(
+                        stock_code=code,
+                        order_type=xtconstant.STOCK_SELL,
+                        order_volume=sell_volume,
+                        price_type=xtconstant.LATEST_PRICE,
+                        price=-1,
+                        strategy_name=strategy_name,
+                        order_remark=f'止盈 {p.upper_income} 倍卖出',
+                    )
+                    sold_codes.append(code)
+                elif curr_price <= cost * p.lower_income:
+                    # 止损卖出
+                    sell_volume = my_position[code]['volume']
+                    logging.warning(f'止损 code: {code} size:{sell_volume} price:{curr_price}')
+                    xt_delegate.order_submit(
+                        stock_code=code,
+                        order_type=xtconstant.STOCK_SELL,
+                        order_volume=sell_volume,
+                        price_type=xtconstant.LATEST_PRICE,
+                        price=-1,
+                        strategy_name='my_strategy',
+                        order_remark=f'止损 {p.lower_income} 倍卖出',
+                    )
+                    sold_codes.append(code)
+
+    for sold_code in sold_codes:
+        del my_position[sold_code]
+
+    if len(sold_codes) > 0:
+        save_json(path_pos, my_position)
+
+    return my_position
+
+
 def callback_sub_whole(quotes: dict):
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y%m%d')
@@ -68,66 +132,7 @@ def callback_sub_whole(quotes: dict):
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
-
-        # 卖出逻辑
-        my_position = load_json(path_pos)
-        sold_codes = []
-        for code in my_position.keys():
-            if code in quotes.keys():
-                quote = quotes[code]
-                curr_price = quote['lastPrice']
-                cost = my_position[code]['cost']
-
-                if my_position[code]['held'] > p.hold_days:  # 判断持仓超过限制
-                    if curr_price < cost * p.stop_income:
-                        # 不满足 5% 盈利的持仓平仓
-                        sell_volume = my_position[code]['volume']
-                        logging.warning(f'换仓 code: {code} size:{sell_volume}')
-                        xt_delegate.order_submit(
-                            stock_code=code,
-                            order_type=xtconstant.STOCK_SELL,
-                            order_volume=sell_volume,
-                            price_type=xtconstant.LATEST_PRICE,
-                            price=-1,
-                            strategy_name=strategy_name,
-                            order_remark=f'超{p.hold_days}天卖出',
-                        )
-                        sold_codes.append(code)
-                elif my_position[code]['held'] > 0:  # 判断持仓超过一天
-                    if curr_price >= cost * p.upper_income:
-                        # 止盈卖出
-                        sell_volume = my_position[code]['volume']
-                        logging.warning(f'止盈 code: {code} size:{sell_volume} price:{curr_price}')
-                        xt_delegate.order_submit(
-                            stock_code=code,
-                            order_type=xtconstant.STOCK_SELL,
-                            order_volume=sell_volume,
-                            price_type=xtconstant.LATEST_PRICE,
-                            price=-1,
-                            strategy_name=strategy_name,
-                            order_remark=f'止盈 {p.upper_income} 倍卖出',
-                        )
-                        sold_codes.append(code)
-                    elif curr_price <= cost * p.lower_income:
-                        # 止损卖出
-                        sell_volume = my_position[code]['volume']
-                        logging.warning(f'止损 code: {code} size:{sell_volume} price:{curr_price}')
-                        xt_delegate.order_submit(
-                            stock_code=code,
-                            order_type=xtconstant.STOCK_SELL,
-                            order_volume=sell_volume,
-                            price_type=xtconstant.LATEST_PRICE,
-                            price=-1,
-                            strategy_name='my_strategy',
-                            order_remark=f'止损 {p.lower_income} 倍卖出',
-                        )
-                        sold_codes.append(code)
-
-        for sold_code in sold_codes:
-            del my_position[sold_code]
-
-        if len(sold_codes) > 0:
-            save_json(path_pos, my_position)
+        my_position = scan_sell(quotes)
 
         # 选股
         selections = []
@@ -199,9 +204,10 @@ def callback_sub_whole(quotes: dict):
             }
             save_json(path_pos, my_position)
 
-    # # 午盘
-    # elif '13:00' <= curr_time <= '14:56':
-    #     pass
+
+    # 午盘
+    elif '13:00' <= curr_time <= '14:56':
+        scan_sell(quotes)
 
     # 盘后
     elif '14:57' <= curr_time <= '15:00':
