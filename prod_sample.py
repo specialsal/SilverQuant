@@ -7,13 +7,15 @@ from _tools.utils_basic import logging_init, load_json, save_json, symbol_to_cod
 from _tools.xt_subscriber import sub_whole_quote
 from _tools.xt_delegate import XtDelegate
 
-strategy_name = "低开翻红策略"
+strategy_name = '低开翻红策略'
 
 path_his = './_cache/prod/history.json'  # 记录选股历史
 path_pos = './_cache/prod/my_position.json'  # 记录持仓
 path_dat = './_cache/prod/curr_date.json'  # 用来确认是不是新的一天出现
 
 xt_delegate = XtDelegate()
+
+minute_flag = []
 
 
 class p:
@@ -29,10 +31,15 @@ class p:
 
 def callback_sub_whole(quotes: dict):
     now = datetime.datetime.now()
-    curr_date = now.strftime("%Y%m%d")
-    curr_time = now.strftime("%H:%M")
+    curr_date = now.strftime('%Y%m%d')
+    curr_time = now.strftime('%H:%M')
 
-    print(".", end='')
+    if curr_date + curr_time not in minute_flag:
+        if curr_time[-1:] == '0':
+            print('\n' + curr_time, end='')
+
+        minute_flag.append(curr_date + curr_time)
+        print('.', end='')
 
     # for symbol in quotes:
     #     print(curr_date, curr_time, datetime.datetime.fromtimestamp(quotes[symbol]['time'] / 1000))
@@ -74,7 +81,7 @@ def callback_sub_whole(quotes: dict):
                     if curr_price >= cost * p.upper_income:
                         # 止盈卖出
                         sell_volume = my_position[code]['volume']
-                        logging.warning(f"止盈 code: {code} size:{sell_volume} price:{curr_price}")
+                        logging.warning(f'止盈 code: {code} size:{sell_volume} price:{curr_price}')
                         xt_delegate.order_submit(
                             stock_code=code,
                             order_type=xtconstant.STOCK_SELL,
@@ -88,7 +95,7 @@ def callback_sub_whole(quotes: dict):
                     elif curr_price <= cost * p.lower_income:
                         # 止损卖出
                         sell_volume = my_position[code]['volume']
-                        logging.warning(f"止损 code: {code} size:{sell_volume} price:{curr_price}")
+                        logging.warning(f'止损 code: {code} size:{sell_volume} price:{curr_price}')
                         xt_delegate.order_submit(
                             stock_code=code,
                             order_type=xtconstant.STOCK_SELL,
@@ -103,7 +110,7 @@ def callback_sub_whole(quotes: dict):
                     if curr_price < cost * p.stop_income:
                         # 不满足 5% 盈利的持仓平仓
                         sell_volume = my_position[code]['volume']
-                        logging.warning(f"换仓 code: {code} size:{sell_volume}")
+                        logging.warning(f'换仓 code: {code} size:{sell_volume}')
                         xt_delegate.order_submit(
                             stock_code=code,
                             order_type=xtconstant.STOCK_SELL,
@@ -153,11 +160,11 @@ def callback_sub_whole(quotes: dict):
             for selection in selections:
                 if selection['symbol'] not in history[curr_date]:
                     history[curr_date].append(selection['symbol'])
-                    logging.warning(f"选股 symbol: {selection['symbol']}  price: {selection['price']}")
+                    logging.warning(f'选股 symbol: {selection["symbol"]}  price: {selection["price"]}')
             save_json(path_his, history)
 
         # 选出的股票按照现价从小到大排序
-        selections = sorted(selections, key=lambda x: x["price"])
+        selections = sorted(selections, key=lambda x: x['price'])
 
         # 如果仓不满，则补仓
         buy_count = max(0, p.max_count - len(my_position.keys()))
@@ -170,14 +177,14 @@ def callback_sub_whole(quotes: dict):
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
             # 如果有可用的买点则买入
-            logging.warning(f"买入 code: {code} size:{buy_volume} price:{price}")
+            logging.warning(f'买入 code: {code} size:{buy_volume} price:{price}')
             xt_delegate.order_submit(
                 stock_code=symbol_to_code(code),
                 order_type=xtconstant.STOCK_BUY,
                 order_volume=buy_volume,
                 price_type=xtconstant.FIX_PRICE,
                 price=price,
-                strategy_name='strategy_name',
+                strategy_name=strategy_name,
                 order_remark=f'{code}买入{buy_volume}',
             )
 
