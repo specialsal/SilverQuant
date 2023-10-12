@@ -3,7 +3,6 @@ import datetime
 from threading import Thread
 from typing import List
 
-from xtquant import xtconstant
 from xtquant.xttrader import XtQuantTrader, XtQuantTraderCallback
 from xtquant.xttype import StockAccount, XtPosition, XtOrder, XtTrade, \
     XtOrderError, XtCancelError, XtOrderResponse, XtCancelOrderResponse, \
@@ -15,7 +14,7 @@ default_account_id = '55009728'
 
 
 class XtDelegate:
-    def __init__(self, account_id: StockAccount = None, path: str = None):
+    def __init__(self, account_id: StockAccount = None, path: str = None, callback: object = None):
         self.xt_trader = None
 
         if path is None:
@@ -25,19 +24,24 @@ class XtDelegate:
         if account_id is None:
             account_id = default_account_id
         self.account = StockAccount(account_id=account_id, account_type='STOCK')
-
-        self.connect()
+        self.callback = callback
+        self.connect(self.callback)
         # 保证QMT持续连接
         Thread(target=self.keep_connected).start()
 
-    def connect(self) -> (XtQuantTrader, bool):
+    def connect(self, callback: object) -> (XtQuantTrader, bool):
         print("连接中...")
         session_id = int(time.time())  # 生成session id 整数类型 同时运行的策略不能重复
         print("生成临时 session_id: ", session_id)
         self.xt_trader = XtQuantTrader(self.path, session_id)
 
-        xt_callback = XtCallback(self)
-        self.xt_trader.register_callback(xt_callback)
+        if callback is None:
+            xt_callback = XtCallback()
+            xt_callback.set_delegate(self)
+            self.xt_trader.register_callback(xt_callback)
+        else:
+            callback.set_delegate(self)
+            self.xt_trader.register_callback(callback)
 
         self.xt_trader.start()  # 启动交易线程
 
@@ -58,7 +62,7 @@ class XtDelegate:
     def reconnect(self) -> None:
         if self.xt_trader is None:
             print('开始重连交易接口')
-            _, success = self.connect()
+            _, success = self.connect(self.callback)
             if success:
                 print('交易接口重连成功')
         # else:
@@ -95,10 +99,37 @@ class XtDelegate:
         else:
             return False
 
+    def order_submit_async(
+            self,
+            stock_code: str,
+            order_type: int,
+            order_volume: int,
+            price_type: int,
+            price: float,
+            strategy_name: str,
+            order_remark: str,
+    ) -> bool:
+        if self.xt_trader is not None:
+            self.xt_trader.order_stock_async(
+                account=self.account,
+                stock_code=stock_code,
+                order_type=order_type,
+                order_volume=order_volume,
+                price_type=price_type,
+                price=price,
+                strategy_name=strategy_name,
+                order_remark=order_remark,
+            )
+            return True
+        else:
+            return False
+
     def order_cancel(self, order_id):
-        print('Cancel:', order_id)
         cancel_result = self.xt_trader.cancel_order_stock(self.account, order_id)
-        print(cancel_result)
+        return cancel_result
+
+    def order_cancel_async(self, order_id):
+        cancel_result = self.xt_trader.cancel_order_stock_async(self.account, order_id)
         return cancel_result
 
     def check_asset(self):
@@ -115,7 +146,10 @@ class XtDelegate:
 
 
 class XtCallback(XtQuantTraderCallback):
-    def __init__(self, delegate: XtDelegate):
+    def __init__(self):
+        self.delegate = None
+
+    def set_delegate(self, delegate: XtDelegate):
         self.delegate = delegate
 
     def on_disconnected(self):
@@ -200,15 +234,16 @@ if __name__ == '__main__':
         #     print("open_price: ", position.open_price)
         #     print("market_value: ", position.market_value)
 
-        xt_delegate.order_submit(
-            stock_code='000001.SZ',
-            order_type=xtconstant.STOCK_SELL,
-            order_volume=100,
-            price_type=xtconstant.LATEST_PRICE,
-            price=-1,
-            strategy_name='策略名称',
-            order_remark='买入000001.SZ',
-        )
+        # from xtquant import xtconstant
+        # xt_delegate.order_submit(
+        #     stock_code='000001.SZ',
+        #     order_type=xtconstant.STOCK_SELL,
+        #     order_volume=100,
+        #     price_type=xtconstant.LATEST_PRICE,
+        #     price=-1,
+        #     strategy_name='策略名称',
+        #     order_remark='下单 000001.SZ',
+        # )
 
         xt_delegate.xt_trader.run_forever()
     finally:
