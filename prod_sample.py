@@ -11,6 +11,7 @@ from typing import List
 from xtquant.xttype import XtPosition
 from xtquant import xtdata, xtconstant
 from _tools.utils_basic import logging_init, load_json, save_json
+from _tools.utils_ding import sample_send_msg
 from _tools.xt_subscriber import sub_whole_quote
 from _tools.xt_delegate import XtDelegate
 
@@ -65,6 +66,8 @@ def before(now: datetime.datetime):
 
 def order_submit(order_type: int, order_code: str, order_volume: int, order_remark: str, order_log: str):
     logging.warning(order_log)
+    sample_send_msg(order_log, 0)
+
     xt_delegate.order_submit_async(
         stock_code=order_code,
         order_type=order_type,
