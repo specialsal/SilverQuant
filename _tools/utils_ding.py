@@ -109,4 +109,4 @@ if __name__ == '__main__':
     #         "isAtAll": False}  # 是否@所有人
     # }
 
-    sample_send_msg("""测试""", 3)
+    sample_send_msg("""测试""", 0)
