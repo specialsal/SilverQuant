@@ -178,7 +178,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime):
         for selection in selections:
             if selection['code'] not in history[curr_date]:
                 history[curr_date].append(selection['code'])
-                logging.warning(f'选股 code: {selection["code"]}  price: {selection["price"]}')
+                logging.warning(f'记录选股历史 code: {selection["code"]} price: {selection["price"]}')
         save_json(path_hist, history)
 
 
