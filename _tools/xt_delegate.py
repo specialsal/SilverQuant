@@ -234,16 +234,16 @@ if __name__ == '__main__':
         #     print("open_price: ", position.open_price)
         #     print("market_value: ", position.market_value)
 
-        # from xtquant import xtconstant
-        # xt_delegate.order_submit(
-        #     stock_code='000001.SZ',
-        #     order_type=xtconstant.STOCK_SELL,
-        #     order_volume=100,
-        #     price_type=xtconstant.LATEST_PRICE,
-        #     price=-1,
-        #     strategy_name='策略名称',
-        #     order_remark='下单 000001.SZ',
-        # )
+        from xtquant import xtconstant
+        xt_delegate.order_submit_async(
+            stock_code='000001.SZ',
+            order_type=xtconstant.STOCK_BUY,
+            order_volume=100,
+            price_type=xtconstant.LATEST_PRICE,
+            price=-1,
+            strategy_name='策略名称',
+            order_remark='下单测试',
+        )
 
         xt_delegate.xt_trader.run_forever()
     finally:
