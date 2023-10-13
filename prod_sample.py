@@ -33,8 +33,8 @@ class p:
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     stop_income = 1.05      # 换仓阈值
-    upper_income = 1.18     # 止盈率
-    upper_income_30 = 1.38  # 止盈率:30开头创业板
+    upper_income = 1.17     # 止盈率
+    upper_income_30 = 1.37  # 止盈率:30开头创业板
     lower_income = 0.95     # 止损率
     low_open = 0.98         # 低开阈值
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
@@ -192,7 +192,7 @@ def callback_sub_whole(quotes: dict):
     else:
         return
 
-    # 屏幕输出 HeartBeat
+    # 屏幕输出 HeartBeat 每分钟一个点
     curr_time = now.strftime('%H:%M')
     if cache['prev_minutes'] != curr_time:
         cache['prev_minutes'] = curr_time
@@ -215,9 +215,9 @@ def callback_sub_whole(quotes: dict):
         positions = xt_delegate.check_positions()
         scan_sell(quotes, positions)
 
-    # 盘后
-    elif '14:57' <= curr_time <= '15:00':
-        pass
+    # # 盘后
+    # elif '14:57' <= curr_time <= '15:00':
+    #     pass
 
 
 if __name__ == '__main__':
