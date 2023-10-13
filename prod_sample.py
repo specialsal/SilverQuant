@@ -58,7 +58,7 @@ def before(now: datetime.datetime):
 
         # 所有持仓天数计数+1
         for code in held_days.keys():
-            held_days[code]['held'] += 1
+            held_days[code] += 1
 
         save_json(path_hold, held_days)
 
