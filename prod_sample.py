@@ -17,14 +17,14 @@ from _tools.xt_delegate import XtDelegate
 strategy_name = '低开翻红策略'
 
 path_hist = './_cache/prod/history.json'    # 记录选股历史
-path_hold = './_cache/prod/held_days.json'  # 记录持仓日期
+path_held = './_cache/prod/held_days.json'  # 记录持仓日期
 path_date = './_cache/prod/curr_date.json'  # 用来确认是不是新的一天出现
 
 xt_delegate = XtDelegate()
 
 cache = {
-    "prev_datetime": "",
-    "minute_flag": "",
+    'prev_datetime': '',
+    'prev_minutes': '',
 }
 
 
@@ -51,16 +51,16 @@ def before(now: datetime.datetime):
         if 'date' not in read_date.keys() or curr_date != read_date['date']:
             save_json(path_date, {'date': curr_date})
             new_day = True
-            print('New day started!')
+            print(f'New day {curr_date} started!')
 
     if new_day:
-        held_days = load_json(path_hold)
+        held_days = load_json(path_held)
 
         # 所有持仓天数计数+1
         for code in held_days.keys():
             held_days[code] += 1
 
-        save_json(path_hold, held_days)
+        save_json(path_held, held_days)
 
 
 def order_submit(order_type: int, order_code: str, order_volume: int, order_remark: str, order_log: str):
@@ -78,7 +78,7 @@ def order_submit(order_type: int, order_code: str, order_volume: int, order_rema
 
 def scan_sell(quotes: dict, positions: List[XtPosition]):
     # 卖出逻辑
-    held_days = load_json(path_hold)
+    held_days = load_json(path_held)
 
     sold_codes = []
     for position in positions:
@@ -116,7 +116,7 @@ def scan_sell(quotes: dict, positions: List[XtPosition]):
     if len(sold_codes) > 0:
         for sold_code in sold_codes:
             del held_days[sold_code]
-        save_json(path_hold, held_days)
+        save_json(path_held, held_days)
 
 
 def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime):
@@ -146,7 +146,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime):
     if len(selections) > 0:  # 选出一个以上的股票
         selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
 
-        held_days = load_json(path_hold)
+        held_days = load_json(path_held)
         asset = xt_delegate.check_asset()
 
         buy_count = max(0, p.max_count - len(held_days.keys()))     # 确认剩余的仓位
@@ -164,9 +164,9 @@ def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime):
             order_submit(xtconstant.STOCK_BUY, code, buy_volume, f'买入{code}', f'买入{buy_volume}股{code}')
 
             # 记录持仓变化
-            held_days = load_json(path_hold)
+            held_days = load_json(path_held)
             held_days[code] = 0
-            save_json(path_hold, held_days)
+            save_json(path_held, held_days)
 
         # 记录选股历史
         history = load_json(path_hist)
@@ -194,8 +194,8 @@ def callback_sub_whole(quotes: dict):
 
     # 屏幕输出 HeartBeat
     curr_time = now.strftime('%H:%M')
-    if cache['minute_flag'] != curr_time:
-        cache['minute_flag'] = curr_time
+    if cache['prev_minutes'] != curr_time:
+        cache['prev_minutes'] = curr_time
         if curr_time[-1:] == '0':
             print('\n' + curr_time, end='')
         print('.', end='')
