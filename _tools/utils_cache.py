@@ -10,9 +10,9 @@ open_day_cache = {}
 
 def check_today_is_open_day_by_df(df, today):
     df = df[df['is_open'] == 1]
-    is_open_day = today in df['cal_date'].values
-    open_day_cache[today] = is_open_day
-    return is_open_day
+    is_today_open_day = today in df['cal_date'].values
+    open_day_cache[today] = is_today_open_day
+    return is_today_open_day
 
 
 def check_today_is_open_day(now: datetime.datetime):
@@ -32,7 +32,7 @@ def check_today_is_open_day(now: datetime.datetime):
     curr_year = datetime.datetime.now().year
     next_year = curr_year + 1
 
-    pro = get_tushare_pro()
+    pro = get_tushare_pro(0)
     df = pro.trade_cal(exchange='', start_date=str(curr_year) + '0101', end_date=str(next_year) + '1231')
     df.to_csv(OPEN_DAY_CACHE_PATH)
 
