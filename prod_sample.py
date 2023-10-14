@@ -11,6 +11,7 @@ from typing import List
 from xtquant.xttype import XtPosition
 from xtquant import xtdata, xtconstant
 from _tools.utils_basic import logging_init, load_json, save_json
+from _tools.utils_cache import check_today_is_open_day
 from _tools.utils_ding import sample_send_msg
 from _tools.xt_subscriber import sub_whole_quote
 from _tools.xt_delegate import XtDelegate
@@ -79,7 +80,7 @@ def order_submit(order_type: int, order_code: str, order_volume: int, order_rema
     )
 
 
-def scan_sell(quotes: dict, positions: List[XtPosition]):
+def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
     # 卖出逻辑
     held_days = load_json(path_held)
 
@@ -122,7 +123,7 @@ def scan_sell(quotes: dict, positions: List[XtPosition]):
         save_json(path_held, held_days)
 
 
-def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime):
+def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime) -> None:
     selections = []
     position_codes = [position.stock_code for position in positions]
 
@@ -185,7 +186,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime):
         save_json(path_hist, history)
 
 
-def callback_sub_whole(quotes: dict):
+def callback_sub_whole(quotes: dict) -> None:
     now = datetime.datetime.now()
 
     # 限制执行频率，每秒至多一次
@@ -193,6 +194,10 @@ def callback_sub_whole(quotes: dict):
     if cache['prev_datetime'] != curr_datetime:
         cache['prev_datetime'] = curr_datetime
     else:
+        return
+
+    # 只有在交易日才执行
+    if not check_today_is_open_day(now):
         return
 
     # 屏幕输出 HeartBeat 每分钟一个点
