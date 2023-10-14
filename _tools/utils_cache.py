@@ -43,8 +43,3 @@ def get_all_historical_symbols():
     with open('_cache/_historical_symbols.txt', 'r') as r:
         symbols = r.read().split('\n')
     return symbols
-
-
-if __name__ == '__main__':
-    print(check_today_is_open_day())
-    print(open_day_cache)

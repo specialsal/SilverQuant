@@ -65,7 +65,13 @@ def before(now: datetime.datetime):
         save_json(path_held, held_days)
 
 
-def order_submit(order_type: int, order_code: str, order_volume: int, order_remark: str, order_log: str):
+def order_submit(
+    order_type: int,
+    order_code: str,
+    order_volume: int,
+    order_remark: str,
+    order_log: str,
+):
     logging.warning(order_log)
     sample_send_msg(order_log, 0)
 
@@ -73,7 +79,7 @@ def order_submit(order_type: int, order_code: str, order_volume: int, order_rema
         stock_code=order_code,
         order_type=order_type,
         order_volume=order_volume,
-        price_type=xtconstant.LATEST_PRICE,
+        price_type=xtconstant.MARKET_SZ_CONVERT_5_CANCEL,
         price=-1,
         strategy_name=strategy_name,
         order_remark=order_remark,
