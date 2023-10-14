@@ -35,8 +35,8 @@ class p:
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     stop_income = 1.05      # 换仓阈值
-    upper_income = 1.17     # 止盈率
-    upper_income_30 = 1.37  # 止盈率:30开头创业板
+    upper_income = 1.168    # 止盈率
+    upper_income_c = 1.368  # 止盈率:30开头创业板
     lower_income = 0.95     # 止损率
     low_open = 0.98         # 低开阈值
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
@@ -112,7 +112,7 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
                                  f'止损 {p.lower_income} 倍卖出',
                                  f'止损卖 code: {code} size:{sell_volume} price:{curr_price}')
                     sold_codes.append(code)
-                elif curr_price >= cost_price * p.upper_income_30 and code[:2] == '30':  # 止盈卖出：创业板
+                elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':  # 止盈卖出：创业板
                     order_submit(xtconstant.STOCK_SELL, code, sell_volume,
                                  f'止盈 {p.upper_income} 倍卖出',
                                  f'止盈卖 code: {code} size:{sell_volume} price:{curr_price}')
