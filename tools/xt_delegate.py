@@ -3,10 +3,10 @@ import datetime
 from threading import Thread
 from typing import List
 
+from xtquant import xtconstant
 from xtquant.xttrader import XtQuantTrader, XtQuantTraderCallback
-from xtquant.xttype import StockAccount, XtPosition, XtOrder, XtTrade, \
-    XtOrderError, XtCancelError, XtOrderResponse, XtCancelOrderResponse, \
-    XtAccountStatus
+from xtquant.xttype import StockAccount, XtPosition, XtOrder, XtTrade, XtAsset, \
+    XtOrderError, XtCancelError, XtOrderResponse, XtCancelOrderResponse, XtAccountStatus
 
 
 default_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
@@ -36,12 +36,10 @@ class XtDelegate:
         self.xt_trader = XtQuantTrader(self.path, session_id)
 
         if callback is None:
-            xt_callback = XtCallback()
-            xt_callback.set_delegate(self)
-            self.xt_trader.register_callback(xt_callback)
-        else:
-            callback.set_delegate(self)
-            self.xt_trader.register_callback(callback)
+            callback = XtDefaultCallback()
+
+        callback.delegate = self
+        self.xt_trader.register_callback(callback)
 
         self.xt_trader.start()  # 启动交易线程
 
@@ -124,40 +122,40 @@ class XtDelegate:
         else:
             return False
 
-    def order_cancel(self, order_id):
+    def order_cancel(self, order_id) -> int:
         cancel_result = self.xt_trader.cancel_order_stock(self.account, order_id)
         return cancel_result
 
-    def order_cancel_async(self, order_id):
+    def order_cancel_async(self, order_id) -> int:
         cancel_result = self.xt_trader.cancel_order_stock_async(self.account, order_id)
         return cancel_result
 
-    def check_asset(self):
-        asset = self.xt_trader.query_stock_asset(self.account)
-        return asset
+    def check_asset(self) -> XtAsset:
+        return self.xt_trader.query_stock_asset(self.account)
 
-    def check_orders(self):
-        orders = self.xt_trader.query_stock_orders(self.account, False)
-        return orders
+    def check_order(self, order_id) -> XtOrder:
+        return self.xt_trader.query_stock_order(self.account, order_id)
+
+    def check_orders(self) -> List[XtOrder]:
+        return self.xt_trader.query_stock_orders(self.account, False)
 
     def check_positions(self) -> List[XtPosition]:
-        positions = self.xt_trader.query_stock_positions(self.account)
-        return positions
+        return self.xt_trader.query_stock_positions(self.account)
 
 
-class XtCallback(XtQuantTraderCallback):
+class XtBaseCallback(XtQuantTraderCallback):
     def __init__(self):
         self.delegate = None
 
-    def set_delegate(self, delegate: XtDelegate):
-        self.delegate = delegate
 
+class XtDefaultCallback(XtBaseCallback):
     def on_disconnected(self):
         print(
             datetime.datetime.now(),
             '连接丢失，断线重连中...'
         )
-        self.delegate.xt_trader = None
+        if self.delegate is not None:
+            self.delegate.xt_trader = None
 
     def on_stock_order(self, order: XtOrder):
         print(
@@ -171,16 +169,16 @@ class XtCallback(XtQuantTraderCallback):
             f'成交回调 id:{trade.order_id} code:{trade.stock_code} remark:{trade.order_remark}',
         )
 
-    def on_order_stock_async_response(self, response: XtOrderResponse):
+    def on_order_stock_async_response(self, res: XtOrderResponse):
         print(
             datetime.datetime.now(),
-            f'异步委托回调 id:{response.order_id} sysid:{response.error_msg} remark:{response.order_remark}',
+            f'异步委托回调 id:{res.order_id} sysid:{res.error_msg} remark:{res.order_remark}',
         )
 
-    def on_cancel_order_stock_async_response(self, response: XtCancelOrderResponse):
+    def on_cancel_order_stock_async_response(self, res: XtCancelOrderResponse):
         print(
             datetime.datetime.now(),
-            f'异步撤单回调 id:{response.order_id} sysid:{response.order_sysid} result:{response.cancel_result}',
+            f'异步撤单回调 id:{res.order_id} sysid:{res.order_sysid} result:{res.cancel_result}',
         )
 
     def on_order_error(self, order_error: XtOrderError):
@@ -202,10 +200,25 @@ class XtCallback(XtQuantTraderCallback):
         )
 
 
+def sell_all_positions(delegate: XtDelegate):
+    positions = delegate.check_positions()
+    for position in positions:
+        if position.volume > 0:
+            xt_delegate.order_submit_async(
+                stock_code=position.stock_code,
+                order_type=xtconstant.STOCK_SELL,
+                order_volume=position.volume,
+                price_type=xtconstant.LATEST_PRICE,
+                price=-1,
+                strategy_name='系统工具',
+                order_remark='一键卖空',
+            )
+
+
 if __name__ == '__main__':
     xt_delegate = XtDelegate()
     try:
-        time.sleep(0.1)
+        time.sleep(0.5)
 
         # asset = xt_delegate.check_asset()
         # print('==== asset ====')
@@ -234,16 +247,17 @@ if __name__ == '__main__':
         #     print("open_price: ", position.open_price)
         #     print("market_value: ", position.market_value)
 
-        from xtquant import xtconstant
-        xt_delegate.order_submit_async(
-            stock_code='000001.SZ',
-            order_type=xtconstant.STOCK_BUY,
-            order_volume=100,
-            price_type=xtconstant.LATEST_PRICE,
-            price=-1,
-            strategy_name='策略名称',
-            order_remark='下单测试',
-        )
+        # xt_delegate.order_submit_async(
+        #     stock_code='002194.SZ',
+        #     order_type=xtconstant.STOCK_SELL,
+        #     order_volume=200,
+        #     price_type=xtconstant.LATEST_PRICE,
+        #     price=-1,
+        #     strategy_name='策略名称',
+        #     order_remark='下单测试',
+        # )
+
+        # sell_all_positions(xt_delegate)
 
         xt_delegate.xt_trader.run_forever()
     finally:
