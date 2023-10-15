@@ -24,7 +24,7 @@ path_date = './_cache/prod/curr_date.json'  # 用来确认是不是新的一天�
 
 xt_delegate = XtDelegate()
 
-cache = {
+memory_cache = {
     'prev_datetime': '',
     'prev_minutes': '',
 }
@@ -43,19 +43,27 @@ class p:
     turn_red_lower = 1.02   # 翻红阈值下限
 
 
+def is_new_day_first(curr_date: str):
+    cache_key = 'prev_date'
+    if cache_key in memory_cache.keys():
+        # 有内存记录
+        if memory_cache[cache_key] != curr_date:
+            save_json(path_date, {'prev_date': curr_date})
+            return True
+    else:
+        # 无内存记录，则寻找文件
+        file_cache = load_json(path_date)
+        if cache_key not in file_cache.keys() or file_cache[cache_key] != curr_date:
+            save_json(path_date, {cache_key: curr_date})
+            return True
+
+    return False
+
+
 def before(now: datetime.datetime):
-    # TODO: 每天 09:15 执行一次就够喽，确认一定会执行哟
-    if True:
-        new_day = False
-        curr_date = now.strftime('%Y%m%d')
-        read_date = load_json(path_date)
-
-        if 'date' not in read_date.keys() or curr_date != read_date['date']:
-            save_json(path_date, {'date': curr_date})
-            new_day = True
-            print(f'New day {curr_date} started!')
-
-    if new_day:
+    curr_date = now.strftime('%Y%m%d')
+    if is_new_day_first(curr_date):
+        print(f'New day {curr_date} started!')
         held_days = load_json(path_held)
 
         # 所有持仓天数计数+1
@@ -197,8 +205,8 @@ def callback_sub_whole(quotes: dict) -> None:
 
     # 限制执行频率，每秒至多一次
     curr_datetime = now.strftime("%Y%m%d %H:%M:%S")
-    if cache['prev_datetime'] != curr_datetime:
-        cache['prev_datetime'] = curr_datetime
+    if memory_cache['prev_datetime'] != curr_datetime:
+        memory_cache['prev_datetime'] = curr_datetime
     else:
         return
 
@@ -208,8 +216,8 @@ def callback_sub_whole(quotes: dict) -> None:
 
     # 屏幕输出 HeartBeat 每分钟一个点
     curr_time = now.strftime('%H:%M')
-    if cache['prev_minutes'] != curr_time:
-        cache['prev_minutes'] = curr_time
+    if memory_cache['prev_minutes'] != curr_time:
+        memory_cache['prev_minutes'] = curr_time
         if curr_time[-1:] == '0':
             print('\n' + curr_time, end='')
         print('.', end='')
