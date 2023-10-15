@@ -111,7 +111,7 @@ def test_get_market():
 
 
 if __name__ == '__main__':
-    from _tools.utils_basic import pd_show_all
+    from tools.utils_basic import pd_show_all
     pd_show_all()
 
     # pre_download()

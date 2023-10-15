@@ -8,7 +8,7 @@ def get_daily_xtdata(
     end_date: str,
     retry_max: int = 3,
 ) -> (pd.DataFrame, bool):
-    from _data_loader.reader_xtdata import get_xtdata_market_datas
+    from data_loader.reader_xtdata import get_xtdata_market_datas
     df = None
     retry = 0
     succeed = False

@@ -52,7 +52,7 @@ def sub_whole_quote(
 
 
 if __name__ == '__main__':
-    from _tools.utils_basic import pd_show_all
+    from tools.utils_basic import pd_show_all
     pd_show_all()
 
     # 订阅单只股票的最新K线行情
