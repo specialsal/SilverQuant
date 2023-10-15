@@ -2,7 +2,7 @@ import os
 import datetime
 import pandas as pd
 
-from _tushare.api_token import get_tushare_pro
+from tools.tushare_token import get_tushare_pro
 
 OPEN_DAY_CACHE_PATH = '_cache/_open_day_list.csv'
 open_day_cache = {}
