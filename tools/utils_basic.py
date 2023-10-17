@@ -47,20 +47,33 @@ def logger_init(path=None) -> logging.Logger:
 
 
 def symbol_to_code(symbol: str) -> str:
-    if symbol[:2] == '00':
+    if symbol[:2] in ['00', '30']:
         return symbol + '.SZ'
-    elif symbol[:2] == '30':
-        return symbol + '.SZ'
-    elif symbol[:2] == '60':
-        return symbol + '.SH'
-    elif symbol[:2] == '68':
+    elif symbol[:2] in ['60', '68']:
         return symbol + '.SH'
     else:
-        return ''
+        return symbol + '.BJ'
 
 
 def code_to_symbol(code: str) -> str:
-    return code.split('.')[0]
+    arr = code.split('.')
+    assert len(arr) == 2, 'code不符合格式'
+    return arr[0]
+
+
+def get_symbol_exchange(symbol: str) -> str:
+    if symbol[:2] in ['00', '30']:
+        return 'SZ'
+    elif symbol[:2] in ['60', '68']:
+        return 'SH'
+    else:
+        return 'BJ'
+
+
+def get_code_exchange(code: str) -> str:
+    arr = code.split('.')
+    assert len(arr) == 2, 'code不符合格式'
+    return arr[1]
 
 
 def load_json(path: str) -> dict:

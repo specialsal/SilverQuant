@@ -5,7 +5,7 @@ from typing import List, Callable
 
 from xtquant.xttype import XtPosition, XtOrder, XtTrade, XtOrderResponse, XtOrderError
 from xtquant import xtdata, xtconstant
-from tools.utils_basic import logging_init, load_json, save_json
+from tools.utils_basic import logging_init, load_json, save_json, get_code_exchange
 from tools.utils_cache import check_today_is_open_day
 from tools.utils_ding import sample_send_msg
 from tools.xt_subscriber import sub_whole_quote
@@ -101,14 +101,19 @@ def held_increase():
     save_json(path_held, held_days)
 
 
-def order_submit(order_type: int, order_code: str, order_volume: int, order_remark: str, order_log: str):
+def order_submit(order_type: int, code: str, order_volume: int, order_remark: str, order_log: str):
     logging.warning(order_log)
+    price_type = xtconstant.LATEST_PRICE
+    if get_code_exchange(code) == 'SZ':
+        price_type = xtconstant.MARKET_SZ_CONVERT_5_CANCEL
+    if get_code_exchange(code) == 'SH':
+        price_type = xtconstant.MARKET_SH_CONVERT_5_CANCEL
 
     xt_delegate.order_submit(
-        stock_code=order_code,
+        stock_code=code,
         order_type=order_type,
         order_volume=order_volume,
-        price_type=xtconstant.MARKET_SZ_CONVERT_5_CANCEL,
+        price_type=price_type,
         price=-1,
         strategy_name=strategy_name,
         order_remark=order_remark,
@@ -247,6 +252,6 @@ def callback_sub_whole(quotes: dict) -> None:
 
 
 if __name__ == '__main__':
-    logging_init()
+    logging_init(level=logging.INFO)
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
