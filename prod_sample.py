@@ -1,37 +1,37 @@
-"""
-TODO:
-* held文件更新，只在成交回调里完成
-"""
-
 import math
 import logging
 import datetime
-from typing import List
+from typing import List, Callable
 
-from xtquant.xttype import XtPosition
+from xtquant.xttype import XtPosition, XtOrder, XtTrade, XtOrderResponse, XtOrderError
 from xtquant import xtdata, xtconstant
 from tools.utils_basic import logging_init, load_json, save_json
 from tools.utils_cache import check_today_is_open_day
 from tools.utils_ding import sample_send_msg
 from tools.xt_subscriber import sub_whole_quote
-from tools.xt_delegate import XtDelegate
+from tools.xt_delegate import XtDelegate, XtBaseCallback
 
-strategy_name = '低开翻红策略'
+strategy_name = '低开翻红样板策略'
 
 path_hist = './_cache/prod/history.json'    # 记录选股历史
 path_held = './_cache/prod/held_days.json'  # 记录持仓日期
-path_date = './_cache/prod/curr_date.json'  # 用来确认是不是新的一天出现
+path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
 
-xt_delegate = XtDelegate()
 
-memory_cache = {
+time_cache = {
     'prev_datetime': '',
     'prev_minutes': '',
 }
 
+target_stock_prefix = [
+    '000', '001', '002', '003',
+    '300', '301',
+    '600', '601', '603', '605',
+]
+
 
 class p:
-    hold_days = 2           # 持仓天数
+    hold_days = 0           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     stop_income = 1.05      # 换仓阈值
@@ -43,47 +43,68 @@ class p:
     turn_red_lower = 1.02   # 翻红阈值下限
 
 
-def is_new_day_first(curr_date: str):
-    cache_key = 'prev_date'
-    if cache_key in memory_cache.keys():
-        # 有内存记录
-        if memory_cache[cache_key] != curr_date:
-            save_json(path_date, {'prev_date': curr_date})
-            return True
-    else:
-        # 无内存记录，则寻找文件
-        file_cache = load_json(path_date)
-        if cache_key not in file_cache.keys() or file_cache[cache_key] != curr_date:
-            save_json(path_date, {cache_key: curr_date})
-            return True
-
-    return False
-
-
-def before(now: datetime.datetime):
-    curr_date = now.strftime('%Y%m%d')
-    if is_new_day_first(curr_date):
-        print(f'New day {curr_date} started!')
+class MyCallback(XtBaseCallback):
+    def on_stock_trade(self, trade: XtTrade):
         held_days = load_json(path_held)
 
-        # 所有持仓天数计数+1
-        for code in held_days.keys():
-            held_days[code] += 1
+        if trade.order_type == xtconstant.STOCK_BUY:
+            log = f'买入{trade.stock_code}成交 {trade.traded_volume}股 均价:{trade.traded_price}'
+            print(log)
+            sample_send_msg(log, 0)
+            held_days[trade.stock_code] = 0
+
+        if trade.order_type == xtconstant.STOCK_SELL:
+            log = f'卖出{trade.stock_code}成交 {trade.traded_volume}股 均价:{trade.traded_price}'
+            print(log)
+            sample_send_msg(log, 0)
+            del held_days[trade.stock_code]
 
         save_json(path_held, held_days)
 
+    def on_order_error(self, order_error: XtOrderError):
+        print(f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}')
 
-def order_submit(
-    order_type: int,
-    order_code: str,
-    order_volume: int,
-    order_remark: str,
-    order_log: str,
-):
+
+my_callback = MyCallback()
+xt_delegate = XtDelegate(callback=my_callback)
+
+
+def daily_once(cache_key: str, curr_date: str, func: Callable, *args):
+    if cache_key in time_cache:
+        # 有内存记录
+        if time_cache[cache_key] != curr_date:
+            # 内存记录不是今天
+            time_cache[cache_key] = curr_date
+            temp_cache = load_json(path_held)
+            temp_cache[cache_key] = curr_date
+            save_json(path_date, temp_cache)
+            func(*args)
+    else:
+        # 无内存记录，则寻找文件
+        temp_cache = load_json(path_date)
+        if cache_key not in temp_cache or temp_cache[cache_key] != curr_date:
+            # 无文件记录或者文件记录不是今天
+            time_cache[cache_key] = curr_date
+            temp_cache[cache_key] = curr_date
+            save_json(path_date, temp_cache)
+            func(*args)
+
+
+def held_increase():
+    print(f'All held stock day +1!')
+    held_days = load_json(path_held)
+
+    # 所有持仓天数计数+1
+    for code in held_days.keys():
+        held_days[code] += 1
+
+    save_json(path_held, held_days)
+
+
+def order_submit(order_type: int, order_code: str, order_volume: int, order_remark: str, order_log: str):
     logging.warning(order_log)
-    sample_send_msg(order_log, 0)
 
-    xt_delegate.order_submit_async(
+    xt_delegate.order_submit(
         stock_code=order_code,
         order_type=order_type,
         order_volume=order_volume,
@@ -98,10 +119,9 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
     # 卖出逻辑
     held_days = load_json(path_held)
 
-    sold_codes = []
     for position in positions:
         code = position.stock_code
-        if code in quotes.keys() and code in held_days.keys():
+        if (code in quotes) and (code in held_days):
             # 如果有数据且有持仓时间记录
             quote = quotes[code]
             curr_price = quote['lastPrice']
@@ -112,42 +132,30 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
                 if curr_price < cost_price * p.stop_income:  # 不满足 5% 盈利的持仓平仓
                     order_submit(xtconstant.STOCK_SELL, code, sell_volume,
                                  f'超{p.hold_days}天卖出',
-                                 f'换仓卖 code: {code} size:{sell_volume}')
-                    sold_codes.append(code)
-            elif held_days[code] > 0:  # 判断持仓超过一天
+                                 f'换仓委托 code: {code} size:{sell_volume}')
+
+            if held_days[code] > 0:  # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:  # 止损卖出
                     order_submit(xtconstant.STOCK_SELL, code, sell_volume,
                                  f'止损 {p.lower_income} 倍卖出',
-                                 f'止损卖 code: {code} size:{sell_volume} price:{curr_price}')
-                    sold_codes.append(code)
+                                 f'止损委托 code: {code} size:{sell_volume} price:{curr_price}')
                 elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':  # 止盈卖出：创业板
                     order_submit(xtconstant.STOCK_SELL, code, sell_volume,
                                  f'止盈 {p.upper_income} 倍卖出',
-                                 f'止盈卖 code: {code} size:{sell_volume} price:{curr_price}')
-                    sold_codes.append(code)
+                                 f'止盈委托 code: {code} size:{sell_volume} price:{curr_price}')
                 elif curr_price >= cost_price * p.upper_income:  # 止盈卖出：主板
                     order_submit(xtconstant.STOCK_SELL, code, sell_volume,
                                  f'止盈 {p.upper_income} 倍卖出',
-                                 f'止盈卖 code: {code} size:{sell_volume} price:{curr_price}')
-                    sold_codes.append(code)
-
-    if len(sold_codes) > 0:
-        for sold_code in sold_codes:
-            del held_days[sold_code]
-        save_json(path_held, held_days)
+                                 f'止盈委托 code: {code} size:{sell_volume} price:{curr_price}')
 
 
-def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime) -> None:
+def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
     selections = []
     position_codes = [position.stock_code for position in positions]
 
     # 扫描全市场选股
     for code in quotes:
-        if code[:3] not in [
-            '000', '001', '002', '003',
-            '300', '301',
-            '600', '601', '603', '605'
-        ]:
+        if code[:3] not in target_stock_prefix:
             continue
 
         last_close = quotes[code]['lastClose']
@@ -179,17 +187,11 @@ def scan_buy(quotes: dict, positions: List[XtPosition], now: datetime.datetime) 
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
             # 如果有可用的买点则买入
-            order_submit(xtconstant.STOCK_BUY, code, buy_volume, f'买入{code}', f'买入{buy_volume}股{code}')
-
-            # 记录持仓变化
-            held_days = load_json(path_held)
-            held_days[code] = 0
-            save_json(path_held, held_days)
+            order_submit(xtconstant.STOCK_BUY, code, buy_volume, f'买入委托{code}', f'买入{buy_volume}股{code}')
 
         # 记录选股历史
         history = load_json(path_hist)
 
-        curr_date = now.strftime('%Y%m%d')
         if curr_date not in history.keys():
             history[curr_date] = []
 
@@ -205,8 +207,8 @@ def callback_sub_whole(quotes: dict) -> None:
 
     # 限制执行频率，每秒至多一次
     curr_datetime = now.strftime("%Y%m%d %H:%M:%S")
-    if memory_cache['prev_datetime'] != curr_datetime:
-        memory_cache['prev_datetime'] = curr_datetime
+    if time_cache['prev_datetime'] != curr_datetime:
+        time_cache['prev_datetime'] = curr_datetime
     else:
         return
 
@@ -216,21 +218,23 @@ def callback_sub_whole(quotes: dict) -> None:
 
     # 屏幕输出 HeartBeat 每分钟一个点
     curr_time = now.strftime('%H:%M')
-    if memory_cache['prev_minutes'] != curr_time:
-        memory_cache['prev_minutes'] = curr_time
+    if time_cache['prev_minutes'] != curr_time:
+        time_cache['prev_minutes'] = curr_time
         if curr_time[-1:] == '0':
             print('\n' + curr_time, end='')
         print('.', end='')
 
+    curr_date = now.strftime('%Y%m%d')
+
     # 盘前
     if '09:15' <= curr_time <= '09:29':
-        before(now)
+        daily_once('_daily_once_held_inc', curr_date, held_increase)
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, positions)
-        scan_buy(quotes, positions, now)
+        scan_buy(quotes, positions, curr_date)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':

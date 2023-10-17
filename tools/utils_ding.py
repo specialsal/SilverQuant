@@ -18,8 +18,7 @@ auth_list = [
 
 
 class DingDingWebHook(object):
-
-    def __init__(self, secret=None, url=None):
+    def __init__(self, secret: str = None, url: str = None):
         """
         :param secret: 安全设置的加签秘钥
         :param url: 机器人没有加签的WebHook_url
@@ -56,17 +55,13 @@ class DingDingWebHook(object):
         send_data = json.dumps(data)  # 将字典类型数据转化为json格式
         send_data = send_data.encode("utf-8")  # 编码为UTF-8格式
 
-        # request = urllib.request.Request(url=self.webhook_url, data=send_data, headers=header)  # 发送请求
-        # opener = urllib.request.urlopen(request)  # 将请求发回的数据构建成为文件格式
-        # print(opener.read())  # 打印返回的结果
-
-        print(self.webhook_url)
-        print(send_data)
+        # print(self.webhook_url)
+        # print(send_data)
         response = requests.post(url=self.webhook_url, data=send_data, headers=header)
         print(response.text)
 
 
-def sample_send_msg(message, auth_number=0):
+def sample_send_msg(message: str, auth_number: int = 0):
     dingding = DingDingWebHook(
         secret=auth_list[auth_number]["secret"],
         url=auth_list[auth_number]["url"]
@@ -82,11 +77,7 @@ def sample_send_msg(message, auth_number=0):
     })
 
 
-def notify_report(
-    report: str,
-    cache_path: Optional[str],
-    channel: int,
-) -> None:
+def notify_report(report: str, cache_path: Optional[str], channel: int) -> None:
     # Cache Message
     if cache_path is not None:
         with open(cache_path, "w") as w:
@@ -109,4 +100,4 @@ if __name__ == '__main__':
     #         "isAtAll": False}  # 是否@所有人
     # }
 
-    sample_send_msg("""测试""", 0)
+    sample_send_msg("""测试""", 3)

@@ -98,14 +98,14 @@ class XtDelegate:
             return False
 
     def order_submit_async(
-            self,
-            stock_code: str,
-            order_type: int,
-            order_volume: int,
-            price_type: int,
-            price: float,
-            strategy_name: str,
-            order_remark: str,
+        self,
+        stock_code: str,
+        order_type: int,
+        order_volume: int,
+        price_type: int,
+        price: float,
+        strategy_name: str,
+        order_remark: str,
     ) -> bool:
         if self.xt_trader is not None:
             self.xt_trader.order_stock_async(
@@ -147,8 +147,6 @@ class XtBaseCallback(XtQuantTraderCallback):
     def __init__(self):
         self.delegate = None
 
-
-class XtDefaultCallback(XtBaseCallback):
     def on_disconnected(self):
         print(
             datetime.datetime.now(),
@@ -157,16 +155,18 @@ class XtDefaultCallback(XtBaseCallback):
         if self.delegate is not None:
             self.delegate.xt_trader = None
 
-    def on_stock_order(self, order: XtOrder):
-        print(
-            datetime.datetime.now(),
-            f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
-        )
 
+class XtDefaultCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
         print(
             datetime.datetime.now(),
             f'成交回调 id:{trade.order_id} code:{trade.stock_code} remark:{trade.order_remark}',
+        )
+
+    def on_stock_order(self, order: XtOrder):
+        print(
+            datetime.datetime.now(),
+            f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
         )
 
     def on_order_stock_async_response(self, res: XtOrderResponse):
@@ -175,16 +175,16 @@ class XtDefaultCallback(XtBaseCallback):
             f'异步委托回调 id:{res.order_id} sysid:{res.error_msg} remark:{res.order_remark}',
         )
 
-    def on_cancel_order_stock_async_response(self, res: XtCancelOrderResponse):
-        print(
-            datetime.datetime.now(),
-            f'异步撤单回调 id:{res.order_id} sysid:{res.order_sysid} result:{res.cancel_result}',
-        )
-
     def on_order_error(self, order_error: XtOrderError):
         print(
             datetime.datetime.now(),
             f'委托报错回调 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}',
+        )
+
+    def on_cancel_order_stock_async_response(self, res: XtCancelOrderResponse):
+        print(
+            datetime.datetime.now(),
+            f'异步撤单回调 id:{res.order_id} sysid:{res.order_sysid} result:{res.cancel_result}',
         )
 
     def on_cancel_error(self, cancel_error: XtCancelError):
@@ -193,11 +193,11 @@ class XtDefaultCallback(XtBaseCallback):
             f'撤单报错回调 id:{cancel_error.order_id} error_id:{cancel_error.error_id} error_msg:{cancel_error.error_msg}',
         )
 
-    def on_account_status(self, status: XtAccountStatus):
-        print(
-            datetime.datetime.now(),
-            f'账号查询回调: id:{status.account_id} type:{status.account_type} status:{status.status} ',
-        )
+    # def on_account_status(self, status: XtAccountStatus):
+    #     print(
+    #         datetime.datetime.now(),
+    #         f'账号查询回调: id:{status.account_id} type:{status.account_type} status:{status.status} ',
+    #     )
 
 
 def sell_all_positions(delegate: XtDelegate):
