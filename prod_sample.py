@@ -3,8 +3,9 @@ import logging
 import datetime
 from typing import List, Callable
 
-from xtquant.xttype import XtPosition, XtOrder, XtTrade, XtOrderResponse, XtOrderError
 from xtquant import xtdata, xtconstant
+from xtquant.xttype import XtPosition, XtTrade, XtOrderError
+
 from tools.utils_basic import logging_init, load_json, save_json, get_code_exchange
 from tools.utils_cache import check_today_is_open_day
 from tools.utils_ding import sample_send_msg
@@ -17,10 +18,9 @@ path_hist = './_cache/prod/history.json'    # 记录选股历史
 path_held = './_cache/prod/held_days.json'  # 记录持仓日期
 path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
 
-
 time_cache = {
-    'prev_datetime': '',
-    'prev_minutes': '',
+    'prev_datetime': '',  # 限制每秒执行一次的缓存
+    'prev_minutes': '',  # 限制每分钟屏幕打印心跳的缓存
 }
 
 target_stock_prefix = [
@@ -114,7 +114,7 @@ def order_submit(order_type: int, code: str, order_volume: int, order_remark: st
         order_type=order_type,
         order_volume=order_volume,
         price_type=price_type,
-        price=-1,
+        price=1,  # 最优五档依然会按照市价下单
         strategy_name=strategy_name,
         order_remark=order_remark,
     )
@@ -229,16 +229,17 @@ def callback_sub_whole(quotes: dict) -> None:
             print('\n' + curr_time, end='')
         print('.', end='')
 
-    curr_date = now.strftime('%Y%m%d')
-
     # 盘前
     if '09:15' <= curr_time <= '09:29':
+        curr_date = now.strftime('%Y%m%d')
         daily_once('_daily_once_held_inc', curr_date, held_increase)
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, positions)
+
+        curr_date = now.strftime('%Y%m%d')
         scan_buy(quotes, positions, curr_date)
 
     # 午盘
