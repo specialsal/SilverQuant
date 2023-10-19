@@ -2,6 +2,7 @@ import time
 import traceback
 import pandas as pd
 from typing import List
+
 from xtquant import xtdata
 
 
@@ -30,13 +31,12 @@ def pre_download(start_date: str, end_date: str):
 
 
 def get_xtdata_market_dict(
-        codes: List[str],
-        period: str = '1d',  # 1m 5m 1d
-        start_date: str = '',
-        end_date: str = '',
-        columns: List[str] = None,
+    codes: List[str],
+    period: str = '1d',  # 1m 5m 1d
+    start_date: str = '',
+    end_date: str = '',
+    columns: List[str] = None,
 ) -> pd.DataFrame:
-    from xtquant import xtdata
     if columns is None:
         columns = ['open', 'close', 'high', 'low', 'volume']
 
@@ -59,11 +59,11 @@ def get_xtdata_market_dict(
 
 
 def get_xtdata_market_datas(
-        codes: List[str],
-        period: str = '1d',  # 1m 5m 1d
-        start_date: str = '',
-        end_date: str = '',
-        columns: List[str] = None,
+    codes: List[str],
+    period: str = '1d',  # 1m 5m 1d
+    start_date: str = '',
+    end_date: str = '',
+    columns: List[str] = None,
 ) -> (pd.DataFrame, bool):
     if columns is None:
         columns = ['open', 'close', 'high', 'low', 'volume']
@@ -92,7 +92,6 @@ def get_xtdata_market_datas(
 
 def full_tick(codes: List[str]):
     # 取全推数据
-    from xtquant import xtdata
     return xtdata.get_full_tick(codes)
 
 
