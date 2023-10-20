@@ -17,6 +17,7 @@ strategy_name = '低开翻红样板策略'
 path_hist = './_cache/prod/history.json'    # 记录选股历史
 path_held = './_cache/prod/held_days.json'  # 记录持仓日期
 path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
+path_logs = './_cache/prod/log.txt'         # 用来存储选股和委托操作
 
 time_cache = {
     'prev_datetime': '',  # 限制每秒执行一次的缓存
@@ -51,21 +52,22 @@ class MyCallback(XtBaseCallback):
         held_days = load_json(path_held)
 
         if trade.order_type == xtconstant.STOCK_BUY:
-            log = f'买入{trade.stock_code}成交 {trade.traded_volume}股 均价:{trade.traded_price}'
-            print(log)
-            sample_send_msg(log, 0)
+            log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
+            logging.warning(log)
+            sample_send_msg(strategy_name + log, 0)
             held_days[trade.stock_code] = 0
 
         if trade.order_type == xtconstant.STOCK_SELL:
-            log = f'卖出{trade.stock_code}成交 {trade.traded_volume}股 均价:{trade.traded_price}'
-            print(log)
-            sample_send_msg(log, 0)
+            log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
+            logging.warning(log)
+            sample_send_msg(strategy_name + log, 0)
             del held_days[trade.stock_code]
 
         save_json(path_held, held_days)
 
     def on_order_error(self, order_error: XtOrderError):
-        print(f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}')
+        log = f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}'
+        logging.warning(log)
 
 
 my_callback = MyCallback()
@@ -104,8 +106,7 @@ def held_increase():
     save_json(path_held, held_days)
 
 
-def order_submit(order_type: int, code: str, order_volume: int, order_remark: str, order_log: str):
-    logging.warning(order_log)
+def order_submit(order_type: int, code: str, order_volume: int, order_remark: str):
     price_type = xtconstant.LATEST_PRICE
     if get_code_exchange(code) == 'SZ':
         price_type = xtconstant.MARKET_SZ_CONVERT_5_CANCEL
@@ -136,25 +137,27 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
             cost_price = position.open_price
             sell_volume = position.volume
 
-            if held_days[code] > p.hold_days:  # 判断持仓超过限制
-                if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:  # 不满足 5% 盈利的持仓平仓
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume,
-                                 f'超{p.hold_days}天卖出',
-                                 f'换仓委托 code: {code} size:{sell_volume}')
+            if held_days[code] > p.hold_days:
+                # 判断持仓超过限制时间
+                if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
+                    # 不满足盈利的持仓平仓
+                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '换仓卖单')
+                    logging.warning(f'换仓委托 {code} {sell_volume}股 现价:{curr_price}')
 
-            if held_days[code] > 0:  # 判断持仓超过一天
-                if curr_price <= cost_price * p.lower_income:  # 止损卖出
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume,
-                                 f'止损 {p.lower_income} 倍卖出',
-                                 f'止损委托 code: {code} size:{sell_volume} price:{curr_price}')
-                elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':  # 止盈卖出：创业板
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume,
-                                 f'止盈 {p.upper_income} 倍卖出',
-                                 f'止盈委托 code: {code} size:{sell_volume} price:{curr_price}')
-                elif curr_price >= cost_price * p.upper_income:  # 止盈卖出：主板
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume,
-                                 f'止盈 {p.upper_income} 倍卖出',
-                                 f'止盈委托 code: {code} size:{sell_volume} price:{curr_price}')
+            if held_days[code] > 0:
+                # 判断持仓超过一天
+                if curr_price <= cost_price * p.lower_income:
+                    # 止损卖出
+                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '止损卖单')
+                    logging.warning(f'止损委托 {code} {sell_volume}股 现价:{curr_price}')
+                elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
+                    # 止盈卖出：创业板
+                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '止盈卖单')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
+                elif curr_price >= cost_price * p.upper_income:
+                    # 止盈卖出：主板
+                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '止盈卖单')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
 
 
 def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
@@ -195,7 +198,9 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
             # 如果有可用的买点则买入
-            order_submit(xtconstant.STOCK_BUY, code, buy_volume, f'买入委托{code}', f'买入{buy_volume}股{code}')
+            if buy_volume > 0:
+                order_submit(xtconstant.STOCK_BUY, code, buy_volume, '选股买单')
+                logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
 
         # 记录选股历史
         history = load_json(path_hist)
@@ -206,7 +211,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
         for selection in selections:
             if selection['code'] not in history[curr_date]:
                 history[curr_date].append(selection['code'])
-                logging.warning(f'记录选股历史 code: {selection["code"]} price: {selection["price"]}')
+                logging.warning(f'记录选股历史 code: {selection["code"]} 现价: {selection["price"]}')
         save_json(path_hist, history)
 
 
@@ -256,6 +261,6 @@ def callback_sub_whole(quotes: dict) -> None:
 
 
 if __name__ == '__main__':
-    logging_init(level=logging.INFO)
+    logging_init(path=path_logs, level=logging.INFO)
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
