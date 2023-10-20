@@ -14,17 +14,17 @@ default_account_id = '55009728'
 
 
 class XtDelegate:
-    def __init__(self, account_id: StockAccount = None, path: str = None, callback: object = None):
+    def __init__(self, account_id: str = None, client_path: str = None, xt_callback: object = None):
         self.xt_trader = None
 
-        if path is None:
-            path = default_client_path
-        self.path = path
+        if client_path is None:
+            client_path = default_client_path
+        self.path = client_path
 
         if account_id is None:
             account_id = default_account_id
         self.account = StockAccount(account_id=account_id, account_type='STOCK')
-        self.callback = callback
+        self.callback = xt_callback
         self.connect(self.callback)
         # 保证QMT持续连接
         Thread(target=self.keep_connected).start()
@@ -73,14 +73,14 @@ class XtDelegate:
             self.reconnect()
 
     def order_submit(
-        self,
-        stock_code: str,
-        order_type: int,
-        order_volume: int,
-        price_type: int,
-        price: float,
-        strategy_name: str,
-        order_remark: str,
+            self,
+            stock_code: str,
+            order_type: int,
+            order_volume: int,
+            price_type: int,
+            price: float,
+            strategy_name: str,
+            order_remark: str,
     ) -> bool:
         if self.xt_trader is not None:
             self.xt_trader.order_stock(
@@ -98,14 +98,14 @@ class XtDelegate:
             return False
 
     def order_submit_async(
-        self,
-        stock_code: str,
-        order_type: int,
-        order_volume: int,
-        price_type: int,
-        price: float,
-        strategy_name: str,
-        order_remark: str,
+            self,
+            stock_code: str,
+            order_type: int,
+            order_volume: int,
+            price_type: int,
+            price: float,
+            strategy_name: str,
+            order_remark: str,
     ) -> bool:
         if self.xt_trader is not None:
             self.xt_trader.order_stock_async(
@@ -215,6 +215,17 @@ def sell_all_positions(delegate: XtDelegate):
             )
 
 
+def get_profit(delegate: XtDelegate):
+    positions = delegate.check_positions()
+    profits = 0
+    for position in positions:
+        if position.volume > 0:
+            profit = (position.market_value - position.volume * position.open_price)
+            print(position.stock_code, profit)
+            profits += profit
+    print(profits)
+
+
 if __name__ == '__main__':
     xt_delegate = XtDelegate()
     try:
@@ -248,16 +259,18 @@ if __name__ == '__main__':
         #     print("market_value: ", position.market_value)
 
         # xt_delegate.order_submit_async(
-        #     stock_code='002194.SZ',
+        #     stock_code='600610.SH',
         #     order_type=xtconstant.STOCK_SELL,
-        #     order_volume=200,
-        #     price_type=xtconstant.LATEST_PRICE,
-        #     price=-1,
+        #     order_volume=500,
+        #     price_type=xtconstant.MARKET_SH_CONVERT_5_CANCEL,
+        #     price=1,
         #     strategy_name='策略名称',
         #     order_remark='下单测试',
         # )
 
         # sell_all_positions(xt_delegate)
+
+        get_profit(xt_delegate)
 
         xt_delegate.xt_trader.run_forever()
     finally:

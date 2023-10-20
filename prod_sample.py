@@ -7,8 +7,8 @@ from xtquant import xtdata, xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError
 
 from tools.utils_basic import logging_init, load_json, save_json, get_code_exchange
-from tools.utils_cache import check_today_is_open_day
 from tools.utils_ding import sample_send_msg
+from tools.utils_xtdata import check_today_is_open_day
 from tools.xt_subscriber import sub_whole_quote
 from tools.xt_delegate import XtDelegate, XtBaseCallback
 
@@ -28,6 +28,9 @@ target_stock_prefix = [
     '300', '301',
     '600', '601', '603', '605',
 ]
+
+my_account_id = '55009728'
+my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 
 
 class p:
@@ -66,7 +69,7 @@ class MyCallback(XtBaseCallback):
 
 
 my_callback = MyCallback()
-xt_delegate = XtDelegate(callback=my_callback)
+xt_delegate = XtDelegate(account_id=my_account_id, client_path=my_client_path, xt_callback=my_callback)
 
 
 def daily_once(cache_key: str, curr_date: str, func: Callable, *args):
@@ -134,7 +137,7 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
             sell_volume = position.volume
 
             if held_days[code] > p.hold_days:  # 判断持仓超过限制
-                if curr_price < cost_price * p.stop_income:  # 不满足 5% 盈利的持仓平仓
+                if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:  # 不满足 5% 盈利的持仓平仓
                     order_submit(xtconstant.STOCK_SELL, code, sell_volume,
                                  f'超{p.hold_days}天卖出',
                                  f'换仓委托 code: {code} size:{sell_volume}')
@@ -217,10 +220,6 @@ def callback_sub_whole(quotes: dict) -> None:
     else:
         return
 
-    # 只有在交易日才执行
-    if not check_today_is_open_day(now):
-        return
-
     # 屏幕输出 HeartBeat 每分钟一个点
     curr_time = now.strftime('%H:%M')
     if time_cache['prev_minutes'] != curr_time:
@@ -228,6 +227,10 @@ def callback_sub_whole(quotes: dict) -> None:
         if curr_time[-1:] == '0':
             print('\n' + curr_time, end='')
         print('.', end='')
+
+    # 只有在交易日才执行
+    if not check_today_is_open_day(now):
+        return
 
     # 盘前
     if '09:15' <= curr_time <= '09:29':
