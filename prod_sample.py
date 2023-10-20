@@ -1,12 +1,14 @@
 import math
 import logging
 import datetime
+import threading
 from typing import List, Callable
 
 from xtquant import xtdata, xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError
 
-from tools.utils_basic import logging_init, load_json, save_json, get_code_exchange
+from tools.utils_basic import logging_init,get_code_exchange
+from tools.utils_cache import load_json, save_json, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import check_today_is_open_day
 from tools.xt_subscriber import sub_whole_quote
@@ -34,6 +36,9 @@ my_account_id = '55009728'
 my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 
 
+my_lock = threading.Lock()  # 创建互斥锁
+
+
 class p:
     hold_days = 0           # 持仓天数
     max_count = 10          # 持股数量上限
@@ -49,21 +54,19 @@ class p:
 
 class MyCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
-        held_days = load_json(path_held)
 
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
             logging.warning(log)
             sample_send_msg(strategy_name + log, 0)
-            held_days[trade.stock_code] = 0
+            new_held(my_lock, path_held, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
             logging.warning(log)
             sample_send_msg(strategy_name + log, 0)
-            del held_days[trade.stock_code]
+            del_held(my_lock, path_held, [trade.stock_code])
 
-        save_json(path_held, held_days)
 
     def on_order_error(self, order_error: XtOrderError):
         log = f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}'
@@ -97,13 +100,7 @@ def daily_once(cache_key: str, curr_date: str, func: Callable, *args):
 
 def held_increase():
     print(f'All held stock day +1!')
-    held_days = load_json(path_held)
-
-    # 所有持仓天数计数+1
-    for code in held_days.keys():
-        held_days[code] += 1
-
-    save_json(path_held, held_days)
+    all_held_inc(my_lock, path_held)
 
 
 def order_submit(order_type: int, code: str, order_volume: int, order_remark: str):
