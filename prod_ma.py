@@ -13,12 +13,13 @@ CLOSE > MA(CLOSE, S)
 
 import logging
 import datetime
+import threading
 from typing import List, Dict
 
 from xtquant import xtdata
 from data_loader.reader_xtdata import get_xtdata_market_dict
 from tools.utils_basic import logging_init, symbol_to_code
-from tools.utils_cache import get_all_historical_symbols
+from tools.utils_cache import get_all_historical_symbols, daily_once
 from tools.utils_xtdata import get_prev_trading_date, check_today_is_open_day
 from tools.xt_subscriber import sub_whole_quote
 # from tools.xt_delegate import XtDelegate
@@ -27,6 +28,8 @@ strategy_name = '均线策略'
 
 my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 my_account_id = '55009728'
+
+my_lock = threading.Lock()  # 创建互斥锁
 
 path_held = './_cache/prod_ma/held_days.json'  # 记录持仓日期
 path_date = './_cache/prod_ma/curr_date.json'  # 用来标记每天执行一次任务的缓存
@@ -68,10 +71,9 @@ def prepare_indicator_source() -> dict:
     end = get_prev_trading_date(now, 1)
 
     t0 = datetime.datetime.now()
-
     group_size = 500
     count = 0
-    indicators = {}
+
     for i in range(0, len(history_codes), group_size):
         sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
         print(f'Preparing {sub_codes}')
@@ -86,7 +88,7 @@ def prepare_indicator_source() -> dict:
             row = data['close'].loc[code]
             if not row.isna().any() and len(row) == 59:
                 count += 1
-                indicators[code] = {
+                indicators_cache[code] = {
                     'ma19': row.tail(19).mean(),
                     'ma39': row.tail(39).mean(),
                     'ma59': row.tail(59).mean(),
@@ -96,7 +98,7 @@ def prepare_indicator_source() -> dict:
     print(f'Preparing time cost: {t1 - t0}')
     print(f'{count} stocks prepared.')
 
-    return indicators
+    return indicators_cache
 
 
 def stock_selection(quote: dict, indicator: dict) -> bool:
@@ -125,7 +127,6 @@ def stock_selection(quote: dict, indicator: dict) -> bool:
 
 
 def scan_buy(quotes: dict, curr_date: str):
-
     selections = []
     for code in quotes:
         if code[:3] not in target_stock_prefix:
@@ -172,8 +173,12 @@ def callback_sub_whole(quotes: dict) -> None:
     if not check_today_is_open_day(now):
         return
 
+    # 预备
+    if '09:10' <= curr_time <= '09:14':
+        daily_once(my_lock, time_cache, path_date, '_daily_once_prepare_ind', curr_date, prepare_indicator_source)
+
     # 早盘
-    if '09:30' <= curr_time <= '11:30':
+    elif '09:30' <= curr_time <= '11:30':
         scan_buy(quotes, curr_date)
 
     # 午盘
@@ -183,8 +188,6 @@ def callback_sub_whole(quotes: dict) -> None:
 
 if __name__ == '__main__':
     logging_init(path=path_logs, level=logging.INFO)
-
-    indicators_cache = prepare_indicator_source()
 
     # xt_delegate = XtDelegate(
     #     account_id=my_account_id,

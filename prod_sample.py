@@ -2,13 +2,13 @@ import math
 import logging
 import datetime
 import threading
-from typing import List, Dict, Callable
+from typing import List, Dict
 
 from xtquant import xtdata, xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError
 
 from tools.utils_basic import logging_init, get_code_exchange
-from tools.utils_cache import load_json, save_json, all_held_inc, new_held, del_held
+from tools.utils_cache import load_json, daily_once, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import check_today_is_open_day
 from tools.xt_subscriber import sub_whole_quote
@@ -70,27 +70,6 @@ class MyCallback(XtBaseCallback):
     def on_order_error(self, order_error: XtOrderError):
         log = f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}'
         logging.warning(log)
-
-
-def daily_once(cache_key: str, curr_date: str, func: Callable, *args):
-    if cache_key in time_cache:
-        # 有内存记录
-        if time_cache[cache_key] != curr_date:
-            # 内存记录不是今天
-            time_cache[cache_key] = curr_date
-            temp_cache = load_json(path_held)
-            temp_cache[cache_key] = curr_date
-            save_json(path_date, temp_cache)
-            func(*args)
-    else:
-        # 无内存记录，则寻找文件
-        temp_cache = load_json(path_date)
-        if cache_key not in temp_cache or temp_cache[cache_key] != curr_date:
-            # 无文件记录或者文件记录不是今天
-            time_cache[cache_key] = curr_date
-            temp_cache[cache_key] = curr_date
-            save_json(path_date, temp_cache)
-            func(*args)
 
 
 def held_increase():
@@ -175,10 +154,9 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
     if len(selections) > 0:  # 选出一个以上的股票
         selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
 
-        held_days = load_json(path_held)
         asset = xt_delegate.check_asset()
 
-        buy_count = max(0, p.max_count - len(held_days.keys()))     # 确认剩余的仓位
+        buy_count = max(0, p.max_count - len(position_codes))       # 确认剩余的仓位
         buy_count = min(buy_count, asset.cash / p.amount_each)      # 确认现金够用
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
         buy_count = min(buy_count, 1)                               # 限每次最多买入数量
@@ -229,7 +207,7 @@ def callback_sub_whole(quotes: dict) -> None:
     # 盘前
     if '09:15' <= curr_time <= '09:29':
         curr_date = now.strftime('%Y%m%d')
-        daily_once('_daily_once_held_inc', curr_date, held_increase)
+        daily_once(my_lock, time_cache, path_date, '_daily_once_held_inc', curr_date, held_increase)
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
@@ -243,10 +221,6 @@ def callback_sub_whole(quotes: dict) -> None:
     elif '13:00' <= curr_time <= '14:56':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, positions)
-
-    # # 盘后
-    # elif '14:57' <= curr_time <= '15:00':
-    #     pass
 
 
 if __name__ == '__main__':
