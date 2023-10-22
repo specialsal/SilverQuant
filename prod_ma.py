@@ -195,5 +195,8 @@ if __name__ == '__main__':
     #     xt_callback=None,
     # )
 
+    curr_date = datetime.datetime.now().strftime('%Y%m%d')
+    daily_once(my_lock, time_cache, path_date, '_daily_once_prepare_ind', curr_date, prepare_indicator_source)
+
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
