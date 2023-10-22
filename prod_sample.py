@@ -2,12 +2,12 @@ import math
 import logging
 import datetime
 import threading
-from typing import List, Callable
+from typing import List, Dict, Callable
 
 from xtquant import xtdata, xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError
 
-from tools.utils_basic import logging_init,get_code_exchange
+from tools.utils_basic import logging_init, get_code_exchange
 from tools.utils_cache import load_json, save_json, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import check_today_is_open_day
@@ -16,10 +16,16 @@ from tools.xt_delegate import XtDelegate, XtBaseCallback
 
 strategy_name = '低开翻红样板策略'
 
-path_hist = './_cache/prod/history.json'    # 记录选股历史
+my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
+my_account_id = '55009728'
+
+my_lock = threading.Lock()  # 创建互斥锁
+
 path_held = './_cache/prod/held_days.json'  # 记录持仓日期
 path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
 path_logs = './_cache/prod/log.txt'         # 用来存储选股和委托操作
+
+history_cache: Dict[str, List] = {}  # 记录选股历史，目的是为了去重
 
 time_cache = {
     'prev_datetime': '',  # 限制每秒执行一次的缓存
@@ -31,12 +37,6 @@ target_stock_prefix = [
     '300', '301',
     '600', '601', '603', '605',
 ]
-
-my_account_id = '55009728'
-my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
-
-
-my_lock = threading.Lock()  # 创建互斥锁
 
 
 class p:
@@ -67,14 +67,9 @@ class MyCallback(XtBaseCallback):
             sample_send_msg(strategy_name + log, 0)
             del_held(my_lock, path_held, [trade.stock_code])
 
-
     def on_order_error(self, order_error: XtOrderError):
         log = f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}'
         logging.warning(log)
-
-
-my_callback = MyCallback()
-xt_delegate = XtDelegate(account_id=my_account_id, client_path=my_client_path, xt_callback=my_callback)
 
 
 def daily_once(cache_key: str, curr_date: str, func: Callable, *args):
@@ -158,10 +153,10 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
 
 
 def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
-    selections = []
     position_codes = [position.stock_code for position in positions]
 
     # 扫描全市场选股
+    selections = []
     for code in quotes:
         if code[:3] not in target_stock_prefix:
             continue
@@ -200,16 +195,13 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
                 logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
 
         # 记录选股历史
-        history = load_json(path_hist)
-
-        if curr_date not in history.keys():
-            history[curr_date] = []
+        if curr_date not in history_cache.keys():
+            history_cache[curr_date] = []
 
         for selection in selections:
-            if selection['code'] not in history[curr_date]:
-                history[curr_date].append(selection['code'])
+            if selection['code'] not in history_cache[curr_date]:
+                history_cache[curr_date].append(selection['code'])
                 logging.warning(f'记录选股历史 code: {selection["code"]} 现价: {selection["price"]}')
-        save_json(path_hist, history)
 
 
 def callback_sub_whole(quotes: dict) -> None:
@@ -259,5 +251,12 @@ def callback_sub_whole(quotes: dict) -> None:
 
 if __name__ == '__main__':
     logging_init(path=path_logs, level=logging.INFO)
+
+    xt_delegate = XtDelegate(
+        account_id=my_account_id,
+        client_path=my_client_path,
+        xt_callback=MyCallback(),
+    )
+
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
