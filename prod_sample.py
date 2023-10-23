@@ -5,7 +5,7 @@ import threading
 from typing import List, Dict
 
 from xtquant import xtdata, xtconstant
-from xtquant.xttype import XtPosition, XtTrade, XtOrderError
+from xtquant.xttype import XtPosition, XtTrade, XtOrder, XtOrderError, XtOrderResponse
 
 from tools.utils_basic import logging_init, get_code_exchange
 from tools.utils_cache import load_json, daily_once, all_held_inc, new_held, del_held
@@ -67,6 +67,14 @@ class MyCallback(XtBaseCallback):
             sample_send_msg(strategy_name + log, 0)
             del_held(my_lock, path_held, [trade.stock_code])
 
+    def on_stock_order(self, order: XtOrder):
+        log = f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
+        logging.warning(log)
+
+    def on_order_stock_async_response(self, res: XtOrderResponse):
+        log = f'异步委托回调 id:{res.order_id} sysid:{res.error_msg} remark:{res.order_remark}',
+        logging.warning(log)
+
     def on_order_error(self, order_error: XtOrderError):
         log = f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}'
         logging.warning(log)
@@ -77,19 +85,19 @@ def held_increase():
     all_held_inc(my_lock, path_held)
 
 
-def order_submit(order_type: int, code: str, order_volume: int, order_remark: str):
+def order_submit(order_type: int, code: str, order_price: float, order_volume: int, order_remark: str):
     price_type = xtconstant.LATEST_PRICE
     if get_code_exchange(code) == 'SZ':
         price_type = xtconstant.MARKET_SZ_CONVERT_5_CANCEL
     if get_code_exchange(code) == 'SH':
-        price_type = xtconstant.MARKET_SH_CONVERT_5_CANCEL
+        price_type = xtconstant.MARKET_PEER_PRICE_FIRST
 
     xt_delegate.order_submit(
         stock_code=code,
         order_type=order_type,
         order_volume=order_volume,
         price_type=price_type,
-        price=1,  # 最优五档依然会按照市价下单
+        price=order_price,  # 最优五档依然会按照市价下单
         strategy_name=strategy_name,
         order_remark=order_remark,
     )
@@ -112,22 +120,22 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
                 # 判断持仓超过限制时间
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
                     # 不满足盈利的持仓平仓
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '换仓卖单')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price + 0.01, sell_volume, '换仓卖单')
                     logging.warning(f'换仓委托 {code} {sell_volume}股 现价:{curr_price}')
 
             if held_days[code] > 0:
                 # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:
                     # 止损卖出
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '止损卖单')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price - 0.01, sell_volume, '止损卖单')
                     logging.warning(f'止损委托 {code} {sell_volume}股 现价:{curr_price}')
                 elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
                     # 止盈卖出：创业板
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '止盈卖单')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price - 0.01, sell_volume, '止盈卖单')
                     logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
                 elif curr_price >= cost_price * p.upper_income:
                     # 止盈卖出：主板
-                    order_submit(xtconstant.STOCK_SELL, code, sell_volume, '止盈卖单')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price - 0.01, sell_volume, '止盈卖单')
                     logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
 
 
@@ -169,7 +177,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
 
             # 如果有可用的买点则买入
             if buy_volume > 0:
-                order_submit(xtconstant.STOCK_BUY, code, buy_volume, '选股买单')
+                order_submit(xtconstant.STOCK_BUY, code, price + 0.01, buy_volume, '选股买单')
                 logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
 
         # 记录选股历史
