@@ -70,6 +70,7 @@ def prepare_indicator_source() -> dict:
     now = datetime.datetime.now()
     start = get_prev_trading_date(now, 59)
     end = get_prev_trading_date(now, 1)
+    print(f'Fetching qmt history data from {start} to {end}')
 
     t0 = datetime.datetime.now()
     group_size = 500
