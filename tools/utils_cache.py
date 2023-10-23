@@ -57,8 +57,8 @@ def daily_once(
                 return
 
 
-def all_held_inc(lock: threading.Lock, path: str):
-    with lock:
+def all_held_inc(held_operation_lock: threading.Lock, path: str):
+    with held_operation_lock:
         held_days = load_json(path)
 
         # 所有持仓天数计数+1
@@ -68,16 +68,16 @@ def all_held_inc(lock: threading.Lock, path: str):
         save_json(path, held_days)
 
 
-def new_held(lock: threading.Lock, path: str, codes: List[str]):
-    with lock:
+def new_held(held_operation_lock: threading.Lock, path: str, codes: List[str]):
+    with held_operation_lock:
         held_days = load_json(path)
         for code in codes:
             held_days[code] = 0
         save_json(path, held_days)
 
 
-def del_held(lock: threading.Lock, path: str, codes: List[str]):
-    with lock:
+def del_held(held_operation_lock: threading.Lock, path: str, codes: List[str]):
+    with held_operation_lock:
         held_days = load_json(path)
         for code in codes:
             if code in held_days:

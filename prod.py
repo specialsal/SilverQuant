@@ -18,14 +18,17 @@ strategy_name = '低开翻红样板策略'
 
 my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 my_account_id = '55009728'
+# my_account_id = '55010470'
 
-my_lock = threading.Lock()  # 创建互斥锁
+# 创建互斥锁
+my_daily_inc_held_lock = threading.Lock()
+my_held_cache_lock = threading.Lock()
 
 path_held = './_cache/prod/held_days.json'  # 记录持仓日期
 path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
 path_logs = './_cache/prod/log.txt'         # 用来存储选股和委托操作
 
-history_cache: Dict[str, List] = {}  # 记录选股历史，目的是为了去重
+history_cache: Dict[str, List] = {}  # 记录选股历史，目的是去重
 
 time_cache = {
     'prev_datetime': '',  # 限制每秒执行一次的缓存
@@ -54,18 +57,17 @@ class p:
 
 class MyCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
-
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
             logging.warning(log)
             sample_send_msg(strategy_name + log, 0)
-            new_held(my_lock, path_held, [trade.stock_code])
+            new_held(my_held_cache_lock, path_held, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
             logging.warning(log)
             sample_send_msg(strategy_name + log, 0)
-            del_held(my_lock, path_held, [trade.stock_code])
+            del_held(my_held_cache_lock, path_held, [trade.stock_code])
 
     def on_stock_order(self, order: XtOrder):
         log = f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
@@ -75,29 +77,35 @@ class MyCallback(XtBaseCallback):
         log = f'异步委托回调 id:{res.order_id} sysid:{res.error_msg} remark:{res.order_remark}',
         logging.warning(log)
 
-    def on_order_error(self, order_error: XtOrderError):
-        log = f'委托报错 id:{order_error.order_id} error_id:{order_error.error_id} error_msg:{order_error.error_msg}'
+    def on_order_error(self, err: XtOrderError):
+        log = f'委托报错 id:{err.order_id} error_id:{err.error_id} error_msg:{err.error_msg}'
         logging.warning(log)
 
 
 def held_increase():
     print(f'All held stock day +1!')
-    all_held_inc(my_lock, path_held)
+    all_held_inc(my_held_cache_lock, path_held)
 
 
-def order_submit(order_type: int, code: str, order_price: float, order_volume: int, order_remark: str):
+def order_submit(order_type: int, code: str, curr_price: float, order_volume: int, order_remark: str):
     price_type = xtconstant.LATEST_PRICE
+    price = -1
     if get_code_exchange(code) == 'SZ':
         price_type = xtconstant.MARKET_SZ_CONVERT_5_CANCEL
+        price = -1
     if get_code_exchange(code) == 'SH':
         price_type = xtconstant.MARKET_PEER_PRICE_FIRST
+        if order_type == xtconstant.STOCK_SELL:
+            price = curr_price - 0.01
+        elif order_type == xtconstant.STOCK_BUY:
+            price = curr_price + 0.01
 
     xt_delegate.order_submit(
         stock_code=code,
         order_type=order_type,
         order_volume=order_volume,
         price_type=price_type,
-        price=order_price,  # 最优五档依然会按照市价下单
+        price=price,
         strategy_name=strategy_name,
         order_remark=order_remark,
     )
@@ -117,26 +125,28 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
             sell_volume = position.volume
 
             if held_days[code] > p.hold_days:
+                print(code, held_days[code], curr_price, cost_price, sell_volume)
                 # 判断持仓超过限制时间
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
                     # 不满足盈利的持仓平仓
-                    order_submit(xtconstant.STOCK_SELL, code, curr_price + 0.01, sell_volume, '换仓卖单')
                     logging.warning(f'换仓委托 {code} {sell_volume}股 现价:{curr_price}')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '换仓卖单')
 
             if held_days[code] > 0:
+                print(code, held_days[code], curr_price, cost_price, sell_volume)
                 # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:
                     # 止损卖出
-                    order_submit(xtconstant.STOCK_SELL, code, curr_price - 0.01, sell_volume, '止损卖单')
                     logging.warning(f'止损委托 {code} {sell_volume}股 现价:{curr_price}')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止损卖单')
                 elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
                     # 止盈卖出：创业板
-                    order_submit(xtconstant.STOCK_SELL, code, curr_price - 0.01, sell_volume, '止盈卖单')
                     logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止盈卖单')
                 elif curr_price >= cost_price * p.upper_income:
                     # 止盈卖出：主板
-                    order_submit(xtconstant.STOCK_SELL, code, curr_price - 0.01, sell_volume, '止盈卖单')
                     logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
+                    order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止盈卖单')
 
 
 def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
@@ -177,7 +187,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
 
             # 如果有可用的买点则买入
             if buy_volume > 0:
-                order_submit(xtconstant.STOCK_BUY, code, price + 0.01, buy_volume, '选股买单')
+                order_submit(xtconstant.STOCK_BUY, code, price, buy_volume, '选股买单')
                 logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
 
         # 记录选股历史
@@ -193,29 +203,27 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
 def callback_sub_whole(quotes: dict) -> None:
     now = datetime.datetime.now()
 
-    # 限制执行频率，每秒至多一次
-    curr_datetime = now.strftime("%Y%m%d %H:%M:%S")
-    if time_cache['prev_datetime'] != curr_datetime:
-        time_cache['prev_datetime'] = curr_datetime
-    else:
-        return
-
-    # 屏幕输出 HeartBeat 每分钟一个点
-    curr_time = now.strftime('%H:%M')
-    if time_cache['prev_minutes'] != curr_time:
-        time_cache['prev_minutes'] = curr_time
-        if curr_time[-1:] == '0':
-            print('\n' + curr_time, end='')
-        print('.', end='')
-
     # 只有在交易日才执行
     if not check_today_is_open_day(now):
         return
 
+    # 改为每秒输出一个 HeartBeat。 每分钟输出一行, 不限制输出频率
+    curr_time = now.strftime('%H:%M')
+    if time_cache['prev_minutes'] != curr_time:
+        time_cache['prev_minutes'] = curr_time
+        print(f'\n[{curr_time}]', end='')
+
+    curr_datetime = now.strftime("%Y%m%d %H:%M:%S")
+    if time_cache['prev_datetime'] != curr_datetime:
+        time_cache['prev_datetime'] = curr_datetime
+        print('.', end='')
+
     # 盘前
     if '09:15' <= curr_time <= '09:29':
         curr_date = now.strftime('%Y%m%d')
-        daily_once(my_lock, time_cache, path_date, '_daily_once_held_inc', curr_date, held_increase)
+        daily_once(
+            my_daily_inc_held_lock, time_cache, path_date, '_daily_once_held_inc',
+            curr_date, held_increase)
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':

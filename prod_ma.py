@@ -29,7 +29,8 @@ strategy_name = '均线策略'
 my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 my_account_id = '55009728'
 
-my_lock = threading.Lock()  # 创建互斥锁
+# 创建互斥锁
+my_daily_prepare_lock = threading.Lock()
 
 path_held = './_cache/prod_ma/held_days.json'  # 记录持仓日期
 path_date = './_cache/prod_ma/curr_date.json'  # 用来标记每天执行一次任务的缓存
@@ -55,7 +56,7 @@ class p:
     S = 20
     M = 40
     N = 60
-    param = 0.0618
+    open_inc = 0.0618
 
 
 def prepare_indicator_source() -> dict:
@@ -108,7 +109,7 @@ def stock_selection(quote: dict, indicator: dict) -> bool:
     if not p_close > p_open:
         return False
 
-    if not (p_close - p_open) > p_close * p.param:
+    if not p_close > p_open * p.open_inc:
         return False
 
     ma_60 = (indicator['ma59'] * 59.0 + p_close) / 60.0
@@ -146,7 +147,7 @@ def scan_buy(quotes: dict, curr_date: str):
         for selection in selections:
             if selection['code'] not in history_cache[curr_date]:
                 history_cache[curr_date].append(selection['code'])
-                logging.warning(f'选股 {selection["code"]} 现价: {selection["price"]}')
+                logging.warning(f'选股 {selection["code"]} 现价: {round(selection["price"], 3)}')
 
 
 def callback_sub_whole(quotes: dict) -> None:
@@ -175,7 +176,9 @@ def callback_sub_whole(quotes: dict) -> None:
 
     # 预备
     if '09:10' <= curr_time <= '09:14':
-        daily_once(my_lock, time_cache, path_date, '_daily_once_prepare_ind', curr_date, prepare_indicator_source)
+        daily_once(
+            my_daily_prepare_lock, time_cache, path_date, '_daily_once_prepare_ind',
+            curr_date, prepare_indicator_source)
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
@@ -195,8 +198,10 @@ if __name__ == '__main__':
     #     xt_callback=None,
     # )
 
-    curr_date = datetime.datetime.now().strftime('%Y%m%d')
-    daily_once(my_lock, time_cache, path_date, '_daily_once_prepare_ind', curr_date, prepare_indicator_source)
+    today = datetime.datetime.now().strftime('%Y%m%d')
+    daily_once(
+        my_daily_prepare_lock, time_cache, path_date, '_daily_once_prepare_ind',
+        today, prepare_indicator_source)
 
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
