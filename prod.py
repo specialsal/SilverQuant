@@ -213,14 +213,14 @@ def callback_sub_whole(quotes: dict) -> None:
         time_cache['prev_minutes'] = curr_time
         print(f'\n[{curr_time}]', end='')
 
-    curr_datetime = now.strftime("%Y%m%d %H:%M:%S")
+    curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
     if time_cache['prev_datetime'] != curr_datetime:
         time_cache['prev_datetime'] = curr_datetime
         print('.', end='')
 
     # 盘前
     if '09:15' <= curr_time <= '09:29':
-        curr_date = now.strftime('%Y%m%d')
+        curr_date = now.strftime('%Y-%m-%d')
         daily_once(
             my_daily_inc_held_lock, time_cache, path_date, '_daily_once_held_inc',
             curr_date, held_increase)
@@ -230,7 +230,7 @@ def callback_sub_whole(quotes: dict) -> None:
         positions = xt_delegate.check_positions()
         scan_sell(quotes, positions)
 
-        curr_date = now.strftime('%Y%m%d')
+        curr_date = now.strftime('%Y-%m-%d')
         scan_buy(quotes, positions, curr_date)
 
     # 午盘

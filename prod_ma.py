@@ -153,27 +153,23 @@ def scan_buy(quotes: dict, curr_date: str):
 def callback_sub_whole(quotes: dict) -> None:
     now = datetime.datetime.now()
 
-    # 限制执行频率，每秒至多一次
-    curr_datetime = now.strftime("%Y%m%d %H:%M:%S")
-    if time_cache['prev_datetime'] != curr_datetime:
-        time_cache['prev_datetime'] = curr_datetime
-    else:
-        return
-
-    # 屏幕输出 HeartBeat 每分钟一个点
-    curr_time = now.strftime('%H:%M')
-    if time_cache['prev_minutes'] != curr_time:
-        time_cache['prev_minutes'] = curr_time
-        if curr_time[-1:] == '0':
-            print('\n' + curr_time, end='')
-        print('.', end='')
-
-    curr_date = now.strftime('%Y%m%d')
-
     # 只有在交易日才执行
     if not check_today_is_open_day(now):
         return
 
+    # 改为每秒输出一个 HeartBeat。 每分钟输出一行, 不限制输出频率
+    curr_time = now.strftime('%H:%M')
+    if time_cache['prev_minutes'] != curr_time:
+        time_cache['prev_minutes'] = curr_time
+        print(f'\n[{curr_time}]', end='')
+
+    curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+    if time_cache['prev_datetime'] != curr_datetime:
+        time_cache['prev_datetime'] = curr_datetime
+        print('.', end='')
+
+
+    curr_date = now.strftime('%Y-%m-%d')
     # 预备
     if '09:10' <= curr_time <= '09:14':
         daily_once(
@@ -198,7 +194,7 @@ if __name__ == '__main__':
     #     xt_callback=None,
     # )
 
-    today = datetime.datetime.now().strftime('%Y%m%d')
+    today = datetime.datetime.now().strftime('%Y-%m-%d')
     daily_once(
         my_daily_prepare_lock, time_cache, path_date, '_daily_once_prepare_ind',
         today, prepare_indicator_source)
