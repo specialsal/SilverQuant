@@ -20,7 +20,7 @@ def check_today_is_open_day(now: datetime.datetime) -> bool:
 
     is_today_open_day = xtdata.datetime_to_timetag(cache_key_today + '000000') in time_tags
     if 8 < now.hour < 18:
-        print(f'{cache_key_today} is {is_today_open_day} open day')
+        print(f'{now.strftime("%H:%M:%S")} {cache_key_today} is {is_today_open_day} open day')
         open_day_cache[cache_key_today] = is_today_open_day
     return is_today_open_day
 

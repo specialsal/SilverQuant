@@ -73,29 +73,9 @@ def get_symbol_exchange(symbol: str) -> str:
 def get_code_exchange(code: str) -> str:
     arr = code.split('.')
     assert len(arr) == 2, 'code不符合格式'
-    return arr[1]
-
-
-def load_json(path: str) -> dict:
-    try:
-        with open(path, 'r') as r:
-            ans = r.read()
-        return json.loads(ans)
-    except:
-        with open(path, 'w') as w:
-            w.write('{}')
-        return {}
-
-
-def save_json(path: str, var: dict):
-    with open(path, 'w') as w:
-        w.write(json.dumps(var, indent=4))
+    return arr[1][:2]
 
 
 if __name__ == '__main__':
-    # logging_init()
+    logging_init()
     # logging.warning('123456')
-
-    save_json('./data/test.json', {'a': 1})
-    a = load_json('./data/test.json')
-    print(a)
