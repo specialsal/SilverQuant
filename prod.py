@@ -62,7 +62,7 @@ class p:
     low_open = 0.98         # 低开阈值
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
-    stop_start = '09:50'  # 每天最早换仓时间
+    stop_start = '09:50'    # 每天最早换仓时间
 
 
 class MyCallback(XtBaseCallback):
