@@ -215,11 +215,20 @@ def sell_all_positions(delegate: XtDelegate):
             )
 
 
+def is_position_holding(position: XtPosition):
+    return position.volume > 0
+
+
+def get_holding_position_count(positions: List[XtPosition]):
+    return sum(1 for position in positions if is_position_holding(position))
+
+
 def get_profit(delegate: XtDelegate):
     positions = delegate.check_positions()
     profits = 0
+
     for position in positions:
-        if position.volume > 0:
+        if is_position_holding(position):
             profit = (position.market_value - position.volume * position.open_price)
             print(position.stock_code, profit)
             profits += profit

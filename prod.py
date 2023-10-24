@@ -1,3 +1,6 @@
+"""
+TODO:
+"""
 import math
 import logging
 import datetime
@@ -5,14 +8,16 @@ import threading
 from typing import List, Dict
 
 from xtquant import xtdata, xtconstant
-from xtquant.xttype import XtPosition, XtTrade, XtOrder, XtOrderError, XtOrderResponse
+from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 from tools.utils_basic import logging_init, get_code_exchange
 from tools.utils_cache import load_json, daily_once, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import check_today_is_open_day
 from tools.xt_subscriber import sub_whole_quote
-from tools.xt_delegate import XtDelegate, XtBaseCallback
+from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count
+
+# ======== 策略常量 ========
 
 strategy_name = '低开翻红样板策略'
 
@@ -20,26 +25,30 @@ my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 my_account_id = '55009728'
 # my_account_id = '55010470'
 
-# 创建互斥锁
-my_daily_inc_held_lock = threading.Lock()
-my_held_cache_lock = threading.Lock()
-
-path_held = './_cache/prod/held_days.json'  # 记录持仓日期
-path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
-path_logs = './_cache/prod/log.txt'         # 用来存储选股和委托操作
-
-history_cache: Dict[str, List] = {}  # 记录选股历史，目的是去重
-
-time_cache = {
-    'prev_datetime': '',  # 限制每秒执行一次的缓存
-    'prev_minutes': '',  # 限制每分钟屏幕打印心跳的缓存
-}
-
 target_stock_prefix = [
     '000', '001', '002', '003',
     '300', '301',
     '600', '601', '603', '605',
 ]
+
+path_held = './_cache/prod/held_days.json'  # 记录持仓日期
+path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
+path_logs = './_cache/prod/log.txt'         # 用来存储选股和委托操作
+
+# ======== 全局变量 ========
+
+my_daily_inc_held_lock = threading.Lock()   # 记录每天一次所有held+1执行用的锁
+my_held_cache_lock = threading.Lock()       # 操作held缓存用的锁
+my_quotes_update_lock = threading.Lock()    # 更新quotes缓存用的锁
+
+
+history_cache: Dict[str, List] = {}  # 记录选股历史，目的是去重
+quotes_cache: Dict[str, Dict] = {}  # 记录实时价格信息
+
+time_cache = {
+    'prev_datetime': '',  # 限制每秒执行一次的缓存
+    'prev_minutes': '',  # 限制每分钟屏幕打印心跳的缓存
+}
 
 
 class p:
@@ -49,29 +58,30 @@ class p:
     stop_income = 1.05      # 换仓阈值
     upper_income = 1.168    # 止盈率
     upper_income_c = 1.368  # 止盈率:30开头创业板
-    lower_income = 0.95     # 止损率
+    lower_income = 0.97     # 止损率
     low_open = 0.98         # 低开阈值
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
+    stop_start = '09:50'  # 每天最早换仓时间
 
 
 class MyCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
         if trade.order_type == xtconstant.STOCK_BUY:
-            log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
+            log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
             sample_send_msg(strategy_name + log, 0)
             new_held(my_held_cache_lock, path_held, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
-            log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price}'
+            log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
             sample_send_msg(strategy_name + log, 0)
             del_held(my_held_cache_lock, path_held, [trade.stock_code])
 
-    def on_stock_order(self, order: XtOrder):
-        log = f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
-        logging.warning(log)
+    # def on_stock_order(self, order: XtOrder):
+    #     log = f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
+    #     logging.warning(log)
 
     def on_order_stock_async_response(self, res: XtOrderResponse):
         log = f'异步委托回调 id:{res.order_id} sysid:{res.error_msg} remark:{res.order_remark}',
@@ -111,7 +121,7 @@ def order_submit(order_type: int, code: str, curr_price: float, order_volume: in
     )
 
 
-def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
+def scan_sell(quotes: dict, positions: List[XtPosition], curr_time: str) -> None:
     # 卖出逻辑
     held_days = load_json(path_held)
 
@@ -124,8 +134,8 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
             cost_price = position.open_price
             sell_volume = position.volume
 
-            if held_days[code] > p.hold_days:
-                print(code, held_days[code], curr_price, cost_price, sell_volume)
+            if held_days[code] > p.hold_days and curr_time >= p.stop_start:
+                # print(code, held_days[code], curr_price, cost_price, sell_volume)
                 # 判断持仓超过限制时间
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
                     # 不满足盈利的持仓平仓
@@ -133,7 +143,7 @@ def scan_sell(quotes: dict, positions: List[XtPosition]) -> None:
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '换仓卖单')
 
             if held_days[code] > 0:
-                print(code, held_days[code], curr_price, cost_price, sell_volume)
+                # print(code, held_days[code], curr_price, cost_price, sell_volume)
                 # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:
                     # 止损卖出
@@ -167,14 +177,14 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
                 and (last_close * p.turn_red_upper > curr_price)
                 and (last_close * p.turn_red_lower < curr_price)):
             if code not in position_codes:  # 如果目前没有持仓则记录
-                selections.append({'code': code, 'price': curr_price})
+                selections.append({'code': code, 'price': round(curr_price, 3)})
 
     if len(selections) > 0:  # 选出一个以上的股票
         selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
 
         asset = xt_delegate.check_asset()
 
-        buy_count = max(0, p.max_count - len(position_codes))       # 确认剩余的仓位
+        buy_count = max(0, p.max_count - get_holding_position_count(positions))       # 确认剩余的仓位
         buy_count = min(buy_count, asset.cash / p.amount_each)      # 确认现金够用
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
         buy_count = min(buy_count, 1)                               # 限每次最多买入数量
@@ -200,27 +210,9 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
                 logging.warning(f'记录选股历史 code: {selection["code"]} 现价: {selection["price"]}')
 
 
-def callback_sub_whole(quotes: dict) -> None:
-    now = datetime.datetime.now()
-
-    # 只有在交易日才执行
-    if not check_today_is_open_day(now):
-        return
-
-    # 改为每秒输出一个 HeartBeat。 每分钟输出一行, 不限制输出频率
-    curr_time = now.strftime('%H:%M')
-    if time_cache['prev_minutes'] != curr_time:
-        time_cache['prev_minutes'] = curr_time
-        print(f'\n[{curr_time}]', end='')
-
-    curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
-    if time_cache['prev_datetime'] != curr_datetime:
-        time_cache['prev_datetime'] = curr_datetime
-        print('.', end='')
-
+def execute_strategy(curr_date, curr_time, quotes):
     # 盘前
     if '09:15' <= curr_time <= '09:29':
-        curr_date = now.strftime('%Y-%m-%d')
         daily_once(
             my_daily_inc_held_lock, time_cache, path_date, '_daily_once_held_inc',
             curr_date, held_increase)
@@ -228,15 +220,40 @@ def callback_sub_whole(quotes: dict) -> None:
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
-        scan_sell(quotes, positions)
+        scan_sell(quotes, positions, curr_time)
 
-        curr_date = now.strftime('%Y-%m-%d')
         scan_buy(quotes, positions, curr_date)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
         positions = xt_delegate.check_positions()
-        scan_sell(quotes, positions)
+        scan_sell(quotes, positions, curr_time)
+
+
+def callback_sub_whole(quotes: dict) -> None:
+    now = datetime.datetime.now()
+
+    # 只有在交易日才执行
+    if not check_today_is_open_day(now):
+        return
+
+    # 每分钟输出一行开头
+    curr_time = now.strftime('%H:%M')
+    if time_cache['prev_minutes'] != curr_time:
+        time_cache['prev_minutes'] = curr_time
+        print(f'\n[{curr_time}]', end='')
+
+    # 每秒钟开始的时候输出一个点
+    with my_quotes_update_lock:
+        curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+        quotes_cache.update(quotes)
+        if time_cache['prev_datetime'] != curr_datetime:
+            time_cache['prev_datetime'] = curr_datetime
+            print('.', end='')
+
+            curr_date = now.strftime('%Y-%m-%d')
+            execute_strategy(curr_date, curr_time, quotes_cache)
+            quotes_cache.clear()
 
 
 if __name__ == '__main__':
@@ -248,5 +265,6 @@ if __name__ == '__main__':
         xt_callback=MyCallback(),
     )
 
+    print('启动行情订阅...')
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
