@@ -37,17 +37,16 @@ path_logs = './_cache/prod/log.txt'         # 用来存储选股和委托操作
 
 # ======== 全局变量 ========
 
-my_daily_inc_held_lock = threading.Lock()   # 记录每天一次所有held+1执行用的锁
-my_held_cache_lock = threading.Lock()       # 操作held缓存用的锁
 my_quotes_update_lock = threading.Lock()    # 更新quotes缓存用的锁
+my_held_cache_lock = threading.Lock()       # 操作held缓存用的锁
+my_daily_inc_held_lock = threading.Lock()   # 记录每天一次所有held+1执行用的锁
 
-
-history_cache: Dict[str, List] = {}  # 记录选股历史，目的是去重
 quotes_cache: Dict[str, Dict] = {}  # 记录实时价格信息
+select_cache: Dict[str, List] = {}  # 记录选股历史，目的是去重
 
 time_cache = {
-    'prev_datetime': '',  # 限制每秒执行一次的缓存
-    'prev_minutes': '',  # 限制每分钟屏幕打印心跳的缓存
+    'prev_datetime': '',    # 限制每秒执行一次的缓存
+    'prev_minutes': '',     # 限制每分钟屏幕打印心跳的缓存
 }
 
 
@@ -62,6 +61,7 @@ class p:
     low_open = 0.98         # 低开阈值
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
+    premium = 0.05          # 保证成功下单成交的溢价
     stop_start = '09:50'    # 每天最早换仓时间
 
 
@@ -70,13 +70,13 @@ class MyCallback(XtBaseCallback):
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
-            sample_send_msg(strategy_name + log, 0)
+            sample_send_msg(f'{my_account_id} - {strategy_name}\n{log}', 0)
             new_held(my_held_cache_lock, path_held, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
-            sample_send_msg(strategy_name + log, 0)
+            sample_send_msg(f'{my_account_id} - {strategy_name}\n{log}', 0)
             del_held(my_held_cache_lock, path_held, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
@@ -106,9 +106,9 @@ def order_submit(order_type: int, code: str, curr_price: float, order_volume: in
     if get_code_exchange(code) == 'SH':
         price_type = xtconstant.MARKET_PEER_PRICE_FIRST
         if order_type == xtconstant.STOCK_SELL:
-            price = curr_price - 0.01
+            price = curr_price - p.premium
         elif order_type == xtconstant.STOCK_BUY:
-            price = curr_price + 0.01
+            price = curr_price + p.premium
 
     xt_delegate.order_submit(
         stock_code=code,
@@ -201,12 +201,12 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
                 logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
 
         # 记录选股历史
-        if curr_date not in history_cache.keys():
-            history_cache[curr_date] = []
+        if curr_date not in select_cache.keys():
+            select_cache[curr_date] = []
 
         for selection in selections:
-            if selection['code'] not in history_cache[curr_date]:
-                history_cache[curr_date].append(selection['code'])
+            if selection['code'] not in select_cache[curr_date]:
+                select_cache[curr_date].append(selection['code'])
                 logging.warning(f'记录选股历史 code: {selection["code"]} 现价: {selection["price"]}')
 
 
@@ -233,10 +233,6 @@ def execute_strategy(curr_date, curr_time, quotes):
 def callback_sub_whole(quotes: dict) -> None:
     now = datetime.datetime.now()
 
-    # 只有在交易日才执行
-    if not check_today_is_open_day(now):
-        return
-
     # 每分钟输出一行开头
     curr_time = now.strftime('%H:%M')
     if time_cache['prev_minutes'] != curr_time:
@@ -249,11 +245,15 @@ def callback_sub_whole(quotes: dict) -> None:
         quotes_cache.update(quotes)
         if time_cache['prev_datetime'] != curr_datetime:
             time_cache['prev_datetime'] = curr_datetime
-            print('.', end='')
-
             curr_date = now.strftime('%Y-%m-%d')
-            execute_strategy(curr_date, curr_time, quotes_cache)
-            quotes_cache.clear()
+
+            # 只有在交易日才执行
+            if check_today_is_open_day(curr_date):
+                print('.', end='')
+                execute_strategy(curr_date, curr_time, quotes_cache)
+                quotes_cache.clear()
+            else:
+                print('x', end='')
 
 
 if __name__ == '__main__':

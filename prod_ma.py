@@ -24,32 +24,37 @@ from tools.utils_xtdata import get_prev_trading_date, check_today_is_open_day
 from tools.xt_subscriber import sub_whole_quote
 # from tools.xt_delegate import XtDelegate
 
+# ======== 策略常量 ========
+
 strategy_name = '均线策略'
 
 my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 my_account_id = '55009728'
-
-# 创建互斥锁
-my_daily_prepare_lock = threading.Lock()
-
-path_held = './_cache/prod_ma/held_days.json'  # 记录持仓日期
-path_date = './_cache/prod_ma/curr_date.json'  # 用来标记每天执行一次任务的缓存
-path_logs = './_cache/prod_ma/log.txt'         # 用来存储选股和委托操作
-
-indicators_cache: Dict[str, Dict[str, float]] = {}
-
-history_cache: Dict[str, List] = {}  # 记录选股历史，目的是为了去重
-
-time_cache = {
-    'prev_datetime': '',  # 限制每秒执行一次的缓存
-    'prev_minutes': '',  # 限制每分钟屏幕打印心跳的缓存
-}
+# my_account_id = '55010470'
 
 target_stock_prefix = [
     '000', '001', '002', '003',
     '300', '301',
     '600', '601', '603', '605',
 ]
+
+path_held = './_cache/prod_ma/held_days.json'  # 记录持仓日期
+path_date = './_cache/prod_ma/curr_date.json'  # 用来标记每天执行一次任务的缓存
+path_logs = './_cache/prod_ma/log.txt'         # 用来存储选股和委托操作
+
+# ======== 全局变量 ========
+
+my_quotes_update_lock = threading.Lock()    # 更新quotes缓存用的锁
+my_daily_prepare_lock = threading.Lock()    # 每天更新历史数据用的锁
+
+quotes_cache: Dict[str, Dict] = {}                  # 记录实时价格信息
+select_cache: Dict[str, List] = {}                  # 记录选股历史，目的是为了去重
+indicators_cache: Dict[str, Dict[str, float]] = {}  # 记录历史指标信息
+
+time_cache = {
+    'prev_datetime': '',    # 限制每秒执行一次的缓存
+    'prev_minutes': '',     # 限制每分钟屏幕打印心跳的缓存
+}
 
 
 class p:
@@ -142,35 +147,16 @@ def scan_buy(quotes: dict, curr_date: str):
 
     if len(selections) > 0:  # 选出一个以上的股票
         # 记录选股历史
-        if curr_date not in history_cache.keys():
-            history_cache[curr_date] = []
+        if curr_date not in select_cache.keys():
+            select_cache[curr_date] = []
 
         for selection in selections:
-            if selection['code'] not in history_cache[curr_date]:
-                history_cache[curr_date].append(selection['code'])
+            if selection['code'] not in select_cache[curr_date]:
+                select_cache[curr_date].append(selection['code'])
                 logging.warning(f'选股 {selection["code"]} 现价: {round(selection["price"], 3)}')
 
 
-def callback_sub_whole(quotes: dict) -> None:
-    now = datetime.datetime.now()
-
-    # 只有在交易日才执行
-    if not check_today_is_open_day(now):
-        return
-
-    # 改为每秒输出一个 HeartBeat。 每分钟输出一行, 不限制输出频率
-    curr_time = now.strftime('%H:%M')
-    if time_cache['prev_minutes'] != curr_time:
-        time_cache['prev_minutes'] = curr_time
-        print(f'\n[{curr_time}]', end='')
-
-    curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
-    if time_cache['prev_datetime'] != curr_datetime:
-        time_cache['prev_datetime'] = curr_datetime
-        print('.', end='')
-
-
-    curr_date = now.strftime('%Y-%m-%d')
+def execute_strategy(curr_date, curr_time, quotes):
     # 预备
     if '09:10' <= curr_time <= '09:14':
         daily_once(
@@ -184,6 +170,32 @@ def callback_sub_whole(quotes: dict) -> None:
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
         scan_buy(quotes, curr_date)
+
+
+def callback_sub_whole(quotes: dict) -> None:
+    now = datetime.datetime.now()
+
+    # 每分钟输出一行开头
+    curr_time = now.strftime('%H:%M')
+    if time_cache['prev_minutes'] != curr_time:
+        time_cache['prev_minutes'] = curr_time
+        print(f'\n[{curr_time}]', end='')
+
+    # 每秒钟开始的时候输出一个点
+    with my_quotes_update_lock:
+        curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+        quotes_cache.update(quotes)
+        if time_cache['prev_datetime'] != curr_datetime:
+            time_cache['prev_datetime'] = curr_datetime
+            curr_date = now.strftime('%Y-%m-%d')
+
+            # 只有在交易日才执行
+            if check_today_is_open_day(curr_date):
+                print('.', end='')
+                execute_strategy(curr_date, curr_time, quotes_cache)
+                quotes_cache.clear()
+            else:
+                print('x', end='')
 
 
 if __name__ == '__main__':
@@ -200,5 +212,6 @@ if __name__ == '__main__':
         my_daily_prepare_lock, time_cache, path_date, '_daily_once_prepare_ind',
         today, prepare_indicator_source)
 
+    print('启动行情订阅...')
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
