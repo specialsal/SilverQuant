@@ -11,9 +11,8 @@ from xtquant import xtdata, xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 from tools.utils_basic import logging_init, get_code_exchange
-from tools.utils_cache import load_json, daily_once, all_held_inc, new_held, del_held
+from tools.utils_cache import load_json, daily_once, all_held_inc, new_held, del_held, check_today_is_open_day
 from tools.utils_ding import sample_send_msg
-from tools.utils_xtdata import check_today_is_open_day
 from tools.xt_subscriber import sub_whole_quote
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count
 
@@ -51,7 +50,7 @@ time_cache = {
 
 
 class p:
-    hold_days = 0           # 持仓天数
+    hold_days = 1           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     stop_income = 1.05      # 换仓阈值
@@ -61,8 +60,8 @@ class p:
     low_open = 0.98         # 低开阈值
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
-    premium = 0.05          # 保证成功下单成交的溢价
-    stop_start = '09:50'    # 每天最早换仓时间
+    order_premium = 0.05    # 保证成功下单成交的溢价
+    stop_start = '09:40'    # 每天最早换仓时间
 
 
 class MyCallback(XtBaseCallback):
@@ -106,9 +105,9 @@ def order_submit(order_type: int, code: str, curr_price: float, order_volume: in
     if get_code_exchange(code) == 'SH':
         price_type = xtconstant.MARKET_PEER_PRICE_FIRST
         if order_type == xtconstant.STOCK_SELL:
-            price = curr_price - p.premium
+            price = curr_price - p.order_premium
         elif order_type == xtconstant.STOCK_BUY:
-            price = curr_price + p.premium
+            price = curr_price + p.order_premium
 
     xt_delegate.order_submit(
         stock_code=code,
@@ -247,7 +246,7 @@ def callback_sub_whole(quotes: dict) -> None:
             time_cache['prev_datetime'] = curr_datetime
             curr_date = now.strftime('%Y-%m-%d')
 
-            # 只有在交易日才执行
+            # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
                 print('.', end='')
                 execute_strategy(curr_date, curr_time, quotes_cache)
@@ -266,5 +265,6 @@ if __name__ == '__main__':
     )
 
     print('启动行情订阅...')
+    check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出

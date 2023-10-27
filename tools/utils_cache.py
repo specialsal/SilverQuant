@@ -1,7 +1,14 @@
 import os
 import json
+import datetime
 import threading
+import pandas as pd
 from typing import List, Dict, Callable
+
+from tools.tushare_token import get_tushare_pro
+
+open_day_cache = {}
+OPEN_DAY_CACHE_PATH = '_cache/_open_day_list.csv'
 
 HISTORICAL_SYMBOLS = '_cache/_historical_symbols.txt'
 
@@ -89,3 +96,42 @@ def get_all_historical_symbols():
     with open(HISTORICAL_SYMBOLS, 'r') as r:
         symbols = r.read().split('\n')
     return symbols
+
+
+def check_today_is_open_day_by_df(df: pd.DataFrame, curr_date: str):
+    today_int = int(curr_date)
+    result = df[df['cal_date'] == today_int]
+    return result['is_open'].values[0] == 1
+
+
+def check_today_is_open_day(curr_date: str):
+    today = datetime.datetime.strptime(curr_date, '%Y-%m-%d').strftime('%Y%m%d')
+    # 内存缓存
+    if today in open_day_cache.keys():
+        return open_day_cache[today]
+
+    # 文件缓存
+    if os.path.exists(OPEN_DAY_CACHE_PATH):  # 文件缓存存在
+        df = pd.read_csv(OPEN_DAY_CACHE_PATH)
+        if int(today) <= df['cal_date'].max():  # 文件缓存未过期
+            open_day_cache[today] = check_today_is_open_day_by_df(df, today)
+            print(f'{today} is {open_day_cache[today]} open day in memory.')
+            return open_day_cache[today]
+
+    # 网络缓存
+    next_year_date = str(int(curr_date[:4]) + 1) + curr_date[4:]
+
+    pro = get_tushare_pro(0)
+    df = pro.trade_cal(
+        exchange='',
+        start_date=curr_date,
+        end_date=next_year_date,
+    )
+    df.to_csv(OPEN_DAY_CACHE_PATH)
+    print(f'Cache open day list in {OPEN_DAY_CACHE_PATH}.')
+
+    df = pd.read_csv(OPEN_DAY_CACHE_PATH)
+    open_day_cache[today] = check_today_is_open_day_by_df(df, today)
+    print(f'{today} is {open_day_cache[today]} open day in memory.')
+
+    return open_day_cache[today]

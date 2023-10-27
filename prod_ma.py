@@ -19,8 +19,8 @@ from typing import List, Dict
 from xtquant import xtdata
 from data_loader.reader_xtdata import get_xtdata_market_dict
 from tools.utils_basic import logging_init, symbol_to_code
-from tools.utils_cache import get_all_historical_symbols, daily_once
-from tools.utils_xtdata import get_prev_trading_date, check_today_is_open_day
+from tools.utils_cache import get_all_historical_symbols, daily_once, check_today_is_open_day
+from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_subscriber import sub_whole_quote
 # from tools.xt_delegate import XtDelegate
 
@@ -189,7 +189,7 @@ def callback_sub_whole(quotes: dict) -> None:
             time_cache['prev_datetime'] = curr_datetime
             curr_date = now.strftime('%Y-%m-%d')
 
-            # 只有在交易日才执行
+            # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
                 print('.', end='')
                 execute_strategy(curr_date, curr_time, quotes_cache)
@@ -213,5 +213,6 @@ if __name__ == '__main__':
         today, prepare_indicator_source)
 
     print('启动行情订阅...')
+    check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
     sub_whole_quote(callback_sub_whole)
     xtdata.run()  # 死循环 阻塞主线程退出
