@@ -3,7 +3,7 @@ import json
 import datetime
 import threading
 import pandas as pd
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, Optional
 
 from tools.tushare_token import get_tushare_pro
 
@@ -30,38 +30,48 @@ def save_json(path: str, var: dict):
 
 
 def daily_once(
-    lock: threading.Lock,
-    memory_cache: Dict,
-    file_cache_path: str,
+    lock: Optional[threading.Lock],   # None时不使用线程锁
+    memory_cache: Dict,     # 不能为None
+    file_cache_path: Optional[str],   # None时重启程序则失效
     cache_key: str,
     curr_date: str,
     function: Callable,
     *args,
 ) -> None:
-    with lock:
+    def _job():
         if cache_key in memory_cache:
             # 有内存记录
             if memory_cache[cache_key] != curr_date:
                 # 内存记录不是今天
                 memory_cache[cache_key] = curr_date
-
-                temp_cache = load_json(file_cache_path)
-                temp_cache[cache_key] = curr_date
-                save_json(file_cache_path, temp_cache)
-
+                if file_cache_path is not None:
+                    file_cache = load_json(file_cache_path)
+                    file_cache[cache_key] = curr_date
+                    save_json(file_cache_path, file_cache)
                 function(*args)
                 return
         else:
-            # 无内存记录，则寻找文件
-            temp_cache = load_json(file_cache_path)
-            if cache_key not in temp_cache or temp_cache[cache_key] != curr_date:
-                # 无文件记录或者文件记录不是今天
+            if file_cache_path is not None:
+                # 无内存记录，有文件路径，则寻找文件
+                file_cache = load_json(file_cache_path)
+                if cache_key not in file_cache or file_cache[cache_key] != curr_date:
+                    # 无文件记录或者文件记录不是今天
+                    memory_cache[cache_key] = curr_date
+                    file_cache[cache_key] = curr_date
+                    save_json(file_cache_path, file_cache)
+                    function(*args)
+                    return
+            else:
+                # 无内存记录，无文件路径，则直接执行并记录
                 memory_cache[cache_key] = curr_date
-
-                temp_cache[cache_key] = curr_date
-                save_json(file_cache_path, temp_cache)
                 function(*args)
                 return
+
+    if lock is None:
+        _job()
+    else:
+        with lock:
+            _job()
 
 
 def all_held_inc(held_operation_lock: threading.Lock, path: str):

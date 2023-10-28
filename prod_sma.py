@@ -26,16 +26,16 @@ from tools.xt_subscriber import sub_whole_quote
 
 # ======== 策略常量 ========
 
-strategy_name = '均线策略'
+strategy_name = '银狐一号'
 
 my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 my_account_id = '55009728'
 # my_account_id = '55010470'
 
 target_stock_prefix = [
-    '000', '001', '002', '003',
+    # '000', '001', '002', '003',
     '300', '301',
-    '600', '601', '603', '605',
+    # '600', '601', '603', '605',
 ]
 
 path_held = './_cache/prod_ma/held_days.json'  # 记录持仓日期
@@ -209,7 +209,7 @@ if __name__ == '__main__':
 
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     daily_once(
-        my_daily_prepare_lock, time_cache, path_date, '_daily_once_prepare_ind',
+        my_daily_prepare_lock, time_cache, None, '_daily_once_prepare_ind',
         today, prepare_indicator_source)
 
     print('启动行情订阅...')
