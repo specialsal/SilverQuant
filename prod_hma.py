@@ -176,8 +176,13 @@ def scan_buy(quotes: dict, curr_date: str):
         for selection in selections:
             if selection['code'] not in select_cache[curr_date]:
                 select_cache[curr_date].append(selection['code'])
-                logging.warning(f'选股 {selection["code"]}\t现价: {round(selection["price"], 3)}\tHMA20:{round(selection["hma20"])}\tHMA40:{round(selection["hma40"])}\tHMA60:{round(selection["hma60"])}')
-
+                logging.warning('选股 {}\t现价: {}\tHMA20:{}\tHMA40:{}\tHMA60:{}'.format(
+                    selection["code"],
+                    round(selection["price"], 3),
+                    round(selection["hma20"], 3),
+                    round(selection["hma40"], 3),
+                    round(selection["hma60"], 3),
+                ))
 
 def execute_strategy(curr_date, curr_time, quotes):
     # 预备
