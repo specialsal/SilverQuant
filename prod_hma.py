@@ -10,7 +10,6 @@ CLOSE > MA(CLOSE, M)
 OPEN < MA(CLOSE, M)
 CLOSE > MA(CLOSE, S)
 """
-import json
 import logging
 import datetime
 import threading
@@ -36,14 +35,14 @@ my_account_id = '55009728'
 # my_account_id = '55010470'
 
 target_stock_prefix = [
-    # '000', '001', '002', '003',
+    '000', '001', '002', '003',
     '300', '301',
-    # '600', '601', '603', '605',
+    '600', '601', '603', '605',
 ]
 
-path_held = './_cache/prod_ma/held_days.json'  # 记录持仓日期
-path_date = './_cache/prod_ma/curr_date.json'  # 用来标记每天执行一次任务的缓存
-path_logs = './_cache/prod_ma/log.txt'         # 用来存储选股和委托操作
+path_held = './_cache/prod_hma/held_days.json'  # 记录持仓日期
+path_date = './_cache/prod_hma/curr_date.json'  # 用来标记每天执行一次任务的缓存
+path_logs = './_cache/prod_hma/log.txt'         # 用来存储选股和委托操作
 
 # ======== 全局变量 ========
 
@@ -109,7 +108,6 @@ def prepare_indicator_source() -> dict:
     print(f'Preparing time cost: {t1 - t0}')
     print(f'{count} stocks prepared.')
 
-
     return indicators_cache
 
 
@@ -124,7 +122,7 @@ def get_last_hma(data: np.array, n: int):
     return hma[-1:][0]
 
 
-def stock_selection(code: str, quote: dict, indicator: dict) -> (bool, float, float, float):
+def stock_selection(quote: dict, indicator: dict) -> (bool, float, float, float):
     p_close = quote['lastPrice']
     p_open = quote['open']
 
@@ -158,7 +156,7 @@ def scan_buy(quotes: dict, curr_date: str):
         if code not in indicators_cache:
             continue
 
-        passed, hma20, hma40, hma60 = stock_selection(code, quotes[code], indicators_cache[code])
+        passed, hma20, hma40, hma60 = stock_selection(quotes[code], indicators_cache[code])
         if passed:
             selections.append({
                 'code': code,
@@ -178,11 +176,12 @@ def scan_buy(quotes: dict, curr_date: str):
                 select_cache[curr_date].append(selection['code'])
                 logging.warning('选股 {}\t现价: {}\tHMA20: {}\tHMA40: {}\tHMA60: {}'.format(
                     selection["code"],
-                    round(selection["price"], 3),
-                    round(selection["hma20"], 3),
-                    round(selection["hma40"], 3),
-                    round(selection["hma60"], 3),
+                    round(selection["price"], 2),
+                    round(selection["hma20"], 2),
+                    round(selection["hma40"], 2),
+                    round(selection["hma60"], 2),
                 ))
+
 
 def execute_strategy(curr_date, curr_time, quotes):
     # 预备
@@ -203,31 +202,31 @@ def execute_strategy(curr_date, curr_time, quotes):
 def callback_sub_whole(quotes: dict) -> None:
     now = datetime.datetime.now()
 
-    # 测试用，实盘的时候记得删掉
-    curr_date = now.strftime('%Y-%m-%d')
-    scan_buy(quotes, curr_date)
+    # # 测试用，实盘的时候记得删掉
+    # curr_date = now.strftime('%Y-%m-%d')
+    # scan_buy(quotes, curr_date)
 
-    # # 每分钟输出一行开头
-    # curr_time = now.strftime('%H:%M')
-    # if time_cache['prev_minutes'] != curr_time:
-    #     time_cache['prev_minutes'] = curr_time
-    #     print(f'\n[{curr_time}]', end='')
-    #
-    # # 每秒钟开始的时候输出一个点
-    # with my_quotes_update_lock:
-    #     curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
-    #     quotes_cache.update(quotes)
-    #     if time_cache['prev_datetime'] != curr_datetime:
-    #         time_cache['prev_datetime'] = curr_datetime
-    #         curr_date = now.strftime('%Y-%m-%d')
-    #
-    #         # 只有在交易日才执行策略
-    #         if check_today_is_open_day(curr_date):
-    #             print('.', end='')
-    #             execute_strategy(curr_date, curr_time, quotes_cache)
-    #             quotes_cache.clear()
-    #         else:
-    #             print('x', end='')
+    # 每分钟输出一行开头
+    curr_time = now.strftime('%H:%M')
+    if time_cache['prev_minutes'] != curr_time:
+        time_cache['prev_minutes'] = curr_time
+        print(f'\n[{curr_time}]', end='')
+
+    # 每秒钟开始的时候输出一个点
+    with my_quotes_update_lock:
+        curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+        quotes_cache.update(quotes)
+        if time_cache['prev_datetime'] != curr_datetime:
+            time_cache['prev_datetime'] = curr_datetime
+            curr_date = now.strftime('%Y-%m-%d')
+
+            # 只有在交易日才执行策略
+            if check_today_is_open_day(curr_date):
+                print('.', end='')
+                execute_strategy(curr_date, curr_time, quotes_cache)
+                quotes_cache.clear()
+            else:
+                print('x', end='')
 
 
 if __name__ == '__main__':

@@ -10,10 +10,10 @@ CLOSE > MA(CLOSE, M)
 OPEN < MA(CLOSE, M)
 CLOSE > MA(CLOSE, S)
 """
-
 import logging
 import datetime
 import threading
+
 from typing import List, Dict
 
 from xtquant import xtdata
@@ -33,14 +33,14 @@ my_account_id = '55009728'
 # my_account_id = '55010470'
 
 target_stock_prefix = [
-    # '000', '001', '002', '003',
+    '000', '001', '002', '003',
     '300', '301',
-    # '600', '601', '603', '605',
+    '600', '601', '603', '605',
 ]
 
-path_held = './_cache/prod_ma/held_days.json'  # 记录持仓日期
-path_date = './_cache/prod_ma/curr_date.json'  # 用来标记每天执行一次任务的缓存
-path_logs = './_cache/prod_ma/log.txt'         # 用来存储选股和委托操作
+path_held = '_cache/prod_sma/held_days.json'  # 记录持仓日期
+path_date = '_cache/prod_sma/curr_date.json'  # 用来标记每天执行一次任务的缓存
+path_logs = '_cache/prod_sma/log.txt'  # 用来存储选股和委托操作
 
 # ======== 全局变量 ========
 
@@ -143,7 +143,10 @@ def scan_buy(quotes: dict, curr_date: str):
             continue
 
         if stock_selection(quotes[code], indicators_cache[code]):
-            selections.append({'code': code, 'price': quotes[code]["lastPrice"]})
+            selections.append({
+                'code': code,
+                'price': quotes[code]["lastPrice"],
+            })
 
     if len(selections) > 0:  # 选出一个以上的股票
         # 记录选股历史
@@ -153,7 +156,10 @@ def scan_buy(quotes: dict, curr_date: str):
         for selection in selections:
             if selection['code'] not in select_cache[curr_date]:
                 select_cache[curr_date].append(selection['code'])
-                logging.warning(f'选股 {selection["code"]} 现价: {round(selection["price"], 3)}')
+                logging.warning('选股 {}\t现价: {}'.format(
+                    selection["code"],
+                    round(selection["price"], 2),
+                ))
 
 
 def execute_strategy(curr_date, curr_time, quotes):
