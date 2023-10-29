@@ -18,7 +18,7 @@ from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_c
 
 # ======== 策略常量 ========
 
-strategy_name = '低开翻红样板策略'
+strategy_name = '布丁'
 
 my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 my_account_id = '55009728'
@@ -50,13 +50,13 @@ time_cache = {
 
 
 class p:
-    hold_days = 1           # 持仓天数
+    hold_days = 0           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     stop_income = 1.05      # 换仓阈值
     upper_income = 1.168    # 止盈率
-    upper_income_c = 1.368  # 止盈率:30开头创业板
-    lower_income = 0.97     # 止损率
+    upper_income_c = 1.28   # 止盈率:30开头创业板
+    lower_income = 0.94     # 止损率
     low_open = 0.98         # 低开阈值
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
@@ -146,15 +146,15 @@ def scan_sell(quotes: dict, positions: List[XtPosition], curr_time: str) -> None
                 # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:
                     # 止损卖出
-                    logging.warning(f'止损委托 {code} {sell_volume}股 现价:{curr_price}')
+                    logging.warning(f'止损委托 {code} {sell_volume}股 现价:{round(curr_price, 3)}')
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止损卖单')
                 elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
                     # 止盈卖出：创业板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{round(curr_price, 3)}')
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止盈卖单')
                 elif curr_price >= cost_price * p.upper_income:
                     # 止盈卖出：主板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{curr_price}')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{round(curr_price, 3)}')
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止盈卖单')
 
 
@@ -206,7 +206,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
         for selection in selections:
             if selection['code'] not in select_cache[curr_date]:
                 select_cache[curr_date].append(selection['code'])
-                logging.warning(f'记录选股历史 code: {selection["code"]} 现价: {selection["price"]}')
+                logging.warning(f'记录选股历史 {selection["code"]} 现价: {selection["price"]}')
 
 
 def execute_strategy(curr_date, curr_time, quotes):
