@@ -108,29 +108,29 @@ def prepare_indicator_source() -> dict:
     return indicators_cache
 
 
-def stock_selection(quote: dict, indicator: dict) -> bool:
+def stock_selection(quote: dict, indicator: dict) -> (bool, dict):
     p_close = quote['lastPrice']
     p_open = quote['open']
 
     if not p_close > p_open:
-        return False
+        return False, {}
 
     if not p_close > p_open * p.open_inc:
-        return False
+        return False, {}
 
     ma_60 = (indicator['ma59'] * 59.0 + p_close) / 60.0
     if not (p_open < ma_60 < p_close):
-        return False
+        return False, {}
 
     ma_40 = (indicator['ma39'] * 39.0 + p_close) / 40.0
     if not (p_open < ma_40 < p_close):
-        return False
+        return False, {}
 
     ma_20 = (indicator['ma19'] * 19.0 + p_close) / 20.0
     if not (p_open < ma_20 < p_close):
-        return False
+        return False, {}
 
-    return True
+    return True, {'sma20': ma_20, 'sma40': ma_40, 'sma60': ma_60}
 
 
 def scan_buy(quotes: dict, curr_date: str):
@@ -142,11 +142,11 @@ def scan_buy(quotes: dict, curr_date: str):
         if code not in indicators_cache:
             continue
 
-        if stock_selection(quotes[code], indicators_cache[code]):
-            selections.append({
-                'code': code,
-                'price': quotes[code]["lastPrice"],
-            })
+        passed, info = stock_selection(quotes[code], indicators_cache[code])
+        if passed:
+            selection = {'code': code, 'price': quotes[code]["lastPrice"]}
+            selection.update(info)
+            selections.append(selection)
 
     if len(selections) > 0:  # 选出一个以上的股票
         # 记录选股历史
@@ -156,9 +156,12 @@ def scan_buy(quotes: dict, curr_date: str):
         for selection in selections:
             if selection['code'] not in select_cache[curr_date]:
                 select_cache[curr_date].append(selection['code'])
-                logging.warning('选股 {}\t现价: {}'.format(
+                logging.warning('选股 {}\t现价: {}\tSMA 20: {}\tSMA 40: {}\tSMA 60: {}'.format(
                     selection["code"],
                     round(selection["price"], 2),
+                    round(selection["sma20"], 2),
+                    round(selection["sma40"], 2),
+                    round(selection["sma60"], 2),
                 ))
 
 

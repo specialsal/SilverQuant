@@ -122,29 +122,29 @@ def get_last_hma(data: np.array, n: int):
     return hma[-1:][0]
 
 
-def stock_selection(quote: dict, indicator: dict) -> (bool, float, float, float):
+def stock_selection(quote: dict, indicator: dict) -> (bool, dict):
     p_close = quote['lastPrice']
     p_open = quote['open']
 
     if not p_close > p_open:
-        return False, 0, 0, 0
+        return False, {}
 
     if not p_close > p_open * p.open_inc:
-        return False, 0, 0, 0
+        return False, {}
 
     ma_60 = get_last_hma(np.append(indicator['past_69'], [p_close]), 60)
     if not (p_open < ma_60 < p_close):
-        return False, 0, 0, 0
+        return False, {}
 
     ma_40 = get_last_hma(np.append(indicator['past_69'], [p_close]), 40)
     if not (p_open < ma_40 < p_close):
-        return False, 0, 0, 0
+        return False, {}
 
     ma_20 = get_last_hma(np.append(indicator['past_69'], [p_close]), 20)
     if not (p_open < ma_20 < p_close):
-        return False, 0, 0, 0
+        return False, {}
 
-    return True, ma_20, ma_40, ma_60
+    return True, {'hma20': ma_20, 'hma40': ma_40, 'hma60': ma_60}
 
 
 def scan_buy(quotes: dict, curr_date: str):
@@ -156,15 +156,11 @@ def scan_buy(quotes: dict, curr_date: str):
         if code not in indicators_cache:
             continue
 
-        passed, hma20, hma40, hma60 = stock_selection(quotes[code], indicators_cache[code])
+        passed, info = stock_selection(quotes[code], indicators_cache[code])
         if passed:
-            selections.append({
-                'code': code,
-                'price': quotes[code]["lastPrice"],
-                'hma20': hma20,
-                'hma40': hma40,
-                'hma60': hma60,
-            })
+            selection = {'code': code, 'price': quotes[code]["lastPrice"]}
+            selection.update(info)
+            selections.append(selection)
 
     if len(selections) > 0:  # 选出一个以上的股票
         # 记录选股历史
@@ -174,7 +170,7 @@ def scan_buy(quotes: dict, curr_date: str):
         for selection in selections:
             if selection['code'] not in select_cache[curr_date]:
                 select_cache[curr_date].append(selection['code'])
-                logging.warning('选股 {}\t现价: {}\tHMA20: {}\tHMA40: {}\tHMA60: {}'.format(
+                logging.warning('选股 {}\t现价: {}\tHMA 20: {}\tHMA 40: {}\tHMA 60: {}'.format(
                     selection["code"],
                     round(selection["price"], 2),
                     round(selection["hma20"], 2),
