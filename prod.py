@@ -61,7 +61,7 @@ class p:
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
     order_premium = 0.05    # 保证成功下单成交的溢价
-    stop_start = '09:40'    # 每天最早换仓时间
+    stop_start = '09:31'    # 每天最早换仓时间
 
 
 class MyCallback(XtBaseCallback):
@@ -186,7 +186,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
         buy_count = max(0, p.max_count - get_holding_position_count(positions))       # 确认剩余的仓位
         buy_count = min(buy_count, asset.cash / p.amount_each)      # 确认现金够用
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
-        buy_count = min(buy_count, 1)                               # 限每次最多买入数量
+        buy_count = min(buy_count, 3)                               # 限每次最多买入数量
 
         # 依次买入
         for i in range(buy_count):

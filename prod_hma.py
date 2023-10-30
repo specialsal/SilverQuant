@@ -63,7 +63,7 @@ class p:
     S = 20
     M = 40
     N = 60
-    open_inc = 0.0618
+    open_inc = 0.02
 
 
 def prepare_indicator_source() -> dict:
@@ -141,7 +141,7 @@ def stock_selection(quote: dict, indicator: dict) -> (bool, float, float, float)
         return False, 0, 0, 0
 
     ma_20 = get_last_hma(np.append(indicator['past_69'], [p_close]), 20)
-    if not (ma_20 < p_close):
+    if not (p_open < ma_20 < p_close):
         return False, 0, 0, 0
 
     return True, ma_20, ma_40, ma_60

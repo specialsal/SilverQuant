@@ -61,7 +61,7 @@ class p:
     S = 20
     M = 40
     N = 60
-    open_inc = 0.0618
+    open_inc = 0.02
 
 
 def prepare_indicator_source() -> dict:
@@ -127,7 +127,7 @@ def stock_selection(quote: dict, indicator: dict) -> bool:
         return False
 
     ma_20 = (indicator['ma19'] * 19.0 + p_close) / 20.0
-    if not (ma_20 < p_close):
+    if not (p_open < ma_20 < p_close):
         return False
 
     return True
