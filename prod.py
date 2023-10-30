@@ -18,21 +18,21 @@ from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_c
 
 # ======== 策略常量 ========
 
-strategy_name = '布丁'
+STRATEGY_NAME = '布丁'
 
-my_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
-my_account_id = '55009728'
-# my_account_id = '55010470'
+QMT_CLIENT_PATH = r'C:\国金QMT交易端模拟\userdata_mini'
+QMT_ACCOUNT_ID = '55009728'
+# QMT_ACCOUNT_ID = '55010470'
 
-target_stock_prefix = [
+TARGET_STOCK_PREFIX = [
     '000', '001', '002', '003',
     '300', '301',
     '600', '601', '603', '605',
 ]
 
-path_held = './_cache/prod/held_days.json'  # 记录持仓日期
-path_date = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
-path_logs = './_cache/prod/log.txt'         # 用来存储选股和委托操作
+PATH_HELD = './_cache/prod/held_days.json'  # 记录持仓日期
+PATH_DATE = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
+PATH_LOGS = './_cache/prod/log.txt'         # 用来存储选股和委托操作
 
 # ======== 全局变量 ========
 
@@ -50,18 +50,21 @@ time_cache = {
 
 
 class p:
+    # 下单持仓
+    switch_begin = '09:31'  # 每天最早换仓时间
     hold_days = 0           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
-    stop_income = 1.05      # 换仓阈值
-    upper_income = 1.168    # 止盈率
+    order_premium = 0.05    # 保证成功下单成交的溢价
+    # 止盈止损
     upper_income_c = 1.28   # 止盈率:30开头创业板
+    upper_income = 1.168    # 止盈率
+    stop_income = 1.05      # 换仓阈值
     lower_income = 0.94     # 止损率
-    low_open = 0.98         # 低开阈值
+    # 策略参数
     turn_red_upper = 1.03   # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
-    order_premium = 0.05    # 保证成功下单成交的溢价
-    stop_start = '09:31'    # 每天最早换仓时间
+    low_open = 0.98         # 低开阈值
 
 
 class MyCallback(XtBaseCallback):
@@ -69,14 +72,14 @@ class MyCallback(XtBaseCallback):
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
-            sample_send_msg(f'{my_account_id} - {strategy_name}\n{log}', 0)
-            new_held(my_held_cache_lock, path_held, [trade.stock_code])
+            sample_send_msg(f'{QMT_ACCOUNT_ID}:{STRATEGY_NAME} - {log}', 0)
+            new_held(my_held_cache_lock, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
-            sample_send_msg(f'{my_account_id} - {strategy_name}\n{log}', 0)
-            del_held(my_held_cache_lock, path_held, [trade.stock_code])
+            sample_send_msg(f'{QMT_ACCOUNT_ID}:{STRATEGY_NAME} - {log}', 0)
+            del_held(my_held_cache_lock, PATH_HELD, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
     #     log = f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
@@ -93,7 +96,7 @@ class MyCallback(XtBaseCallback):
 
 def held_increase():
     print(f'All held stock day +1!')
-    all_held_inc(my_held_cache_lock, path_held)
+    all_held_inc(my_held_cache_lock, PATH_HELD)
 
 
 def order_submit(order_type: int, code: str, curr_price: float, order_volume: int, order_remark: str):
@@ -115,14 +118,14 @@ def order_submit(order_type: int, code: str, curr_price: float, order_volume: in
         order_volume=order_volume,
         price_type=price_type,
         price=price,
-        strategy_name=strategy_name,
+        strategy_name=STRATEGY_NAME,
         order_remark=order_remark,
     )
 
 
 def scan_sell(quotes: dict, positions: List[XtPosition], curr_time: str) -> None:
     # 卖出逻辑
-    held_days = load_json(path_held)
+    held_days = load_json(PATH_HELD)
 
     for position in positions:
         code = position.stock_code
@@ -133,8 +136,7 @@ def scan_sell(quotes: dict, positions: List[XtPosition], curr_time: str) -> None
             cost_price = position.open_price
             sell_volume = position.volume
 
-            if held_days[code] > p.hold_days and curr_time >= p.stop_start:
-                # print(code, held_days[code], curr_price, cost_price, sell_volume)
+            if held_days[code] > p.hold_days and curr_time >= p.switch_begin:
                 # 判断持仓超过限制时间
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
                     # 不满足盈利的持仓平仓
@@ -142,7 +144,6 @@ def scan_sell(quotes: dict, positions: List[XtPosition], curr_time: str) -> None
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '换仓卖单')
 
             if held_days[code] > 0:
-                # print(code, held_days[code], curr_price, cost_price, sell_volume)
                 # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:
                     # 止损卖出
@@ -158,25 +159,30 @@ def scan_sell(quotes: dict, positions: List[XtPosition], curr_time: str) -> None
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止盈卖单')
 
 
+def stock_selection(quote: dict) -> bool:
+    last_close = quote['lastClose']
+    curr_open = quote['open']
+    curr_price = quote['lastPrice']
+
+    return ((curr_open < last_close * p.low_open)
+            and (last_close * p.turn_red_upper > curr_price)
+            and (last_close * p.turn_red_lower < curr_price))
+
+
 def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
     position_codes = [position.stock_code for position in positions]
 
     # 扫描全市场选股
     selections = []
     for code in quotes:
-        if code[:3] not in target_stock_prefix:
+        if code[:3] not in TARGET_STOCK_PREFIX:
             continue
 
-        last_close = quotes[code]['lastClose']
-        curr_open = quotes[code]['open']
-        curr_price = quotes[code]['lastPrice']
-
+        passed = stock_selection(quotes[code])
         # 筛选符合买入条件的股票
-        if ((curr_open < last_close * p.low_open)
-                and (last_close * p.turn_red_upper > curr_price)
-                and (last_close * p.turn_red_lower < curr_price)):
+        if passed:
             if code not in position_codes:  # 如果目前没有持仓则记录
-                selections.append({'code': code, 'price': round(curr_price, 3)})
+                selections.append({'code': code, 'price': quotes[code]["lastPrice"]})
 
     if len(selections) > 0:  # 选出一个以上的股票
         selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
@@ -206,21 +212,23 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
         for selection in selections:
             if selection['code'] not in select_cache[curr_date]:
                 select_cache[curr_date].append(selection['code'])
-                logging.warning(f'记录选股历史 {selection["code"]} 现价: {selection["price"]}')
+                logging.warning('选股 {}\t现价: {}'.format(
+                    round(selection['code']),
+                    round(selection['price']),
+                ))
 
 
 def execute_strategy(curr_date, curr_time, quotes):
     # 盘前
     if '09:15' <= curr_time <= '09:29':
         daily_once(
-            my_daily_inc_held_lock, time_cache, path_date, '_daily_once_held_inc',
+            my_daily_inc_held_lock, time_cache, PATH_DATE, '_daily_once_held_inc',
             curr_date, held_increase)
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, positions, curr_time)
-
         scan_buy(quotes, positions, curr_date)
 
     # 午盘
@@ -256,11 +264,11 @@ def callback_sub_whole(quotes: dict) -> None:
 
 
 if __name__ == '__main__':
-    logging_init(path=path_logs, level=logging.INFO)
+    logging_init(path=PATH_LOGS, level=logging.INFO)
 
     xt_delegate = XtDelegate(
-        account_id=my_account_id,
-        client_path=my_client_path,
+        account_id=QMT_ACCOUNT_ID,
+        client_path=QMT_CLIENT_PATH,
         xt_callback=MyCallback(),
     )
 
