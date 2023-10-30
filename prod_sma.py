@@ -157,11 +157,11 @@ def scan_buy(quotes: dict, curr_date: str):
             if selection['code'] not in select_cache[curr_date]:
                 select_cache[curr_date].append(selection['code'])
                 logging.warning('选股 {}\t现价: {}\tSMA 20: {}\tSMA 40: {}\tSMA 60: {}'.format(
-                    selection["code"],
-                    round(selection["price"], 2),
-                    round(selection["sma20"], 2),
-                    round(selection["sma40"], 2),
-                    round(selection["sma60"], 2),
+                    selection['code'],
+                    round(selection['price'], 2),
+                    round(selection['sma20'], 2),
+                    round(selection['sma40'], 2),
+                    round(selection['sma60'], 2),
                 ))
 
 
