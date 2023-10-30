@@ -36,14 +36,13 @@ PATH_LOGS = './_cache/prod/log.txt'         # 用来存储选股和委托操作
 
 # ======== 全局变量 ========
 
-my_quotes_update_lock = threading.Lock()    # 更新quotes缓存用的锁
-my_held_cache_lock = threading.Lock()       # 操作held缓存用的锁
-my_daily_inc_held_lock = threading.Lock()   # 记录每天一次所有held+1执行用的锁
+lock_quotes_update = threading.Lock()   # 更新quotes缓存用的锁
+lock_held_op_cache = threading.Lock()   # 操作held缓存用的锁
+lock_held_days_inc = threading.Lock()   # 记录每天一次所有held+1执行用的锁
 
-quotes_cache: Dict[str, Dict] = {}  # 记录实时价格信息
-select_cache: Dict[str, List] = {}  # 记录选股历史，目的是去重
-
-time_cache = {
+cache_quotes: Dict[str, Dict] = {}  # 记录实时价格信息
+cache_select: Dict[str, List] = {}  # 记录选股历史，目的是去重
+cache_limits: Dict[str, str] = {
     'prev_datetime': '',    # 限制每秒执行一次的缓存
     'prev_minutes': '',     # 限制每分钟屏幕打印心跳的缓存
 }
@@ -73,13 +72,13 @@ class MyCallback(XtBaseCallback):
             log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
             sample_send_msg(f'{QMT_ACCOUNT_ID}:{STRATEGY_NAME} - {log}', 0)
-            new_held(my_held_cache_lock, PATH_HELD, [trade.stock_code])
+            new_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
             logging.warning(log)
             sample_send_msg(f'{QMT_ACCOUNT_ID}:{STRATEGY_NAME} - {log}', 0)
-            del_held(my_held_cache_lock, PATH_HELD, [trade.stock_code])
+            del_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
     #     log = f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
@@ -96,7 +95,7 @@ class MyCallback(XtBaseCallback):
 
 def held_increase():
     print(f'All held stock day +1!')
-    all_held_inc(my_held_cache_lock, PATH_HELD)
+    all_held_inc(lock_held_op_cache, PATH_HELD)
 
 
 def order_submit(order_type: int, code: str, curr_price: float, order_volume: int, order_remark: str):
@@ -206,12 +205,12 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
                 logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
 
         # 记录选股历史
-        if curr_date not in select_cache.keys():
-            select_cache[curr_date] = []
+        if curr_date not in cache_select.keys():
+            cache_select[curr_date] = []
 
         for selection in selections:
-            if selection['code'] not in select_cache[curr_date]:
-                select_cache[curr_date].append(selection['code'])
+            if selection['code'] not in cache_select[curr_date]:
+                cache_select[curr_date].append(selection['code'])
                 logging.warning('选股 {}\t现价: {}'.format(
                     round(selection['code']),
                     round(selection['price']),
@@ -222,7 +221,7 @@ def execute_strategy(curr_date, curr_time, quotes):
     # 盘前
     if '09:15' <= curr_time <= '09:29':
         daily_once(
-            my_daily_inc_held_lock, time_cache, PATH_DATE, '_daily_once_held_inc',
+            lock_held_days_inc, cache_limits, PATH_DATE, '_daily_once_held_inc',
             curr_date, held_increase)
 
     # 早盘
@@ -242,23 +241,23 @@ def callback_sub_whole(quotes: dict) -> None:
 
     # 每分钟输出一行开头
     curr_time = now.strftime('%H:%M')
-    if time_cache['prev_minutes'] != curr_time:
-        time_cache['prev_minutes'] = curr_time
+    if cache_limits['prev_minutes'] != curr_time:
+        cache_limits['prev_minutes'] = curr_time
         print(f'\n[{curr_time}]', end='')
 
     # 每秒钟开始的时候输出一个点
-    with my_quotes_update_lock:
+    with lock_quotes_update:
         curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
-        quotes_cache.update(quotes)
-        if time_cache['prev_datetime'] != curr_datetime:
-            time_cache['prev_datetime'] = curr_datetime
+        cache_quotes.update(quotes)
+        if cache_limits['prev_datetime'] != curr_datetime:
+            cache_limits['prev_datetime'] = curr_datetime
             curr_date = now.strftime('%Y-%m-%d')
 
             # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
                 print('.', end='')
-                execute_strategy(curr_date, curr_time, quotes_cache)
-                quotes_cache.clear()
+                execute_strategy(curr_date, curr_time, cache_quotes)
+                cache_quotes.clear()
             else:
                 print('x', end='')
 
