@@ -12,7 +12,7 @@ from typing import List, Dict
 from xtquant import xtdata
 from data_loader.reader_xtdata import get_xtdata_market_dict
 from tools.utils_basic import logging_init, symbol_to_code
-from tools.utils_cache import get_all_historical_symbols, daily_once, check_today_is_open_day
+from tools.utils_cache import get_all_historical_symbols, daily_once, check_today_is_open_day, load_pickle, save_pickle
 from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_subscriber import sub_whole_quote
 # from tools.xt_delegate import XtDelegate
@@ -27,13 +27,14 @@ QMT_ACCOUNT_ID = '55009728'
 
 TARGET_STOCK_PREFIX = [
     '000', '001', '002', '003',
-    '300', '301',
+    # '300', '301',
     '600', '601', '603', '605',
 ]
 
 PATH_HELD = './_cache/prod_hma/held_days.json'  # 记录持仓日期
 PATH_DATE = './_cache/prod_hma/curr_date.json'  # 用来标记每天执行一次任务的缓存
 PATH_LOGS = './_cache/prod_hma/log.txt'         # 用来存储选股和委托操作
+PATH_INFO = './_cache/prod_hma/info-{}.pkl'     # 用来缓存当天计算的历史指标之类的信息
 
 # ======== 全局变量 ========
 
@@ -53,52 +54,56 @@ class p:
     S = 20
     M = 40
     N = 60
-    open_inc = 0.02
+    open_inc = 0.02         # 相对于开盘价涨幅阈值
+    day_count = 69          # 70个足够算出周期为60的 HMA
+    data_cols = ['close']   # 历史数据需要的列
 
 
-def prepare_indicator_source() -> dict:
-    history_symbols = get_all_historical_symbols()
-    history_codes = [
-        symbol_to_code(symbol)
-        for symbol in history_symbols
-        if symbol[:3] in TARGET_STOCK_PREFIX
-    ]
+def prepare_indicator_source(cache_path: str) -> None:
+    temp_indicators = load_pickle(cache_path)
+    if temp_indicators is not None:
+        cache_indicators.update(temp_indicators)
+    else:
+        history_symbols = get_all_historical_symbols()
+        history_codes = [
+            symbol_to_code(symbol)
+            for symbol in history_symbols
+            if symbol[:3] in TARGET_STOCK_PREFIX
+        ]
 
-    now = datetime.datetime.now()
+        now = datetime.datetime.now()
 
-    day_count = 69  # 70个足够算出周期为60的 HMA
+        start = get_prev_trading_date(now, p.day_count)
+        end = get_prev_trading_date(now, 1)
+        print(f'Fetching qmt history data from {start} to {end}')
 
-    start = get_prev_trading_date(now, day_count)
-    end = get_prev_trading_date(now, 1)
-    print(f'Fetching qmt history data from {start} to {end}')
+        t0 = datetime.datetime.now()
+        group_size = 500
+        count = 0
 
-    t0 = datetime.datetime.now()
-    group_size = 500
-    count = 0
+        # 获取需要的历史数据
+        for i in range(0, len(history_codes), group_size):
+            sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
+            print(f'Preparing {sub_codes}')
+            data = get_xtdata_market_dict(
+                codes=sub_codes,
+                start_date=start,
+                end_date=end,
+                columns=p.data_cols,
+            )
 
-    for i in range(0, len(history_codes), group_size):
-        sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
-        print(f'Preparing {sub_codes}')
-        data = get_xtdata_market_dict(
-            codes=sub_codes,
-            start_date=start,
-            end_date=end,
-            columns=['close'],
-        )
+            for code in sub_codes:
+                row = data['close'].loc[code]
+                if not row.isna().any() and len(row) == p.day_count:
+                    count += 1
+                    cache_indicators[code] = {
+                        'past_69': row.tail(p.day_count).values,
+                    }
 
-        for code in sub_codes:
-            row = data['close'].loc[code]
-            if not row.isna().any() and len(row) == day_count:
-                count += 1
-                cache_indicators[code] = {
-                    'past_69': row.tail(day_count).values,
-                }
-
-    t1 = datetime.datetime.now()
-    print(f'Preparing time cost: {t1 - t0}')
-    print(f'{count} stocks prepared.')
-
-    return cache_indicators
+        t1 = datetime.datetime.now()
+        print(f'Preparing time cost: {t1 - t0}')
+        print(f'{count} stocks prepared.')
+        save_pickle(cache_path, cache_indicators)
 
 
 def get_last_hma(data: np.array, n: int):
@@ -174,7 +179,7 @@ def execute_strategy(curr_date, curr_time, quotes):
     if '09:10' <= curr_time <= '09:14':
         daily_once(
             lock_daily_prepare, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
-            curr_date, prepare_indicator_source)
+            curr_date, prepare_indicator_source, PATH_INFO.format(today))
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
@@ -227,7 +232,7 @@ if __name__ == '__main__':
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     daily_once(
         lock_daily_prepare, cache_limits, None, '_daily_once_prepare_ind',
-        today, prepare_indicator_source)
+        today, prepare_indicator_source, PATH_INFO.format(today))
 
     print('启动行情订阅...')
     check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))

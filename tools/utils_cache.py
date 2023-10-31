@@ -1,16 +1,37 @@
 import os
 import json
+import pickle
 import datetime
 import threading
-import pandas as pd
 from typing import List, Dict, Callable, Optional
+
+import numpy as np
+import pandas as pd
+import akshare as ak
 
 from tools.tushare_token import get_tushare_pro
 
 open_day_cache = {}
 OPEN_DAY_CACHE_PATH = '_cache/_open_day_list.csv'
 
+STOCK_LIST_PATH = '_cache/_stock_list.csv'
+STOCK_LIST_TXT_PATH = '_cache/_stock_list.txt'
 HISTORICAL_SYMBOLS = '_cache/_historical_symbols.txt'
+HISTORICAL_OPEN_DAYS_PATH = '_cache/_historical_open_days.csv'
+
+
+def load_pickle(path: str) -> Optional[dict]:
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            loaded_object = pickle.load(f)
+        return loaded_object
+    else:
+        return None
+
+
+def save_pickle(path: str, obj: object) -> None:
+    with open(path, 'wb') as f:
+        pickle.dump(obj, f)
 
 
 def load_json(path: str) -> dict:
@@ -24,7 +45,7 @@ def load_json(path: str) -> dict:
         return {}
 
 
-def save_json(path: str, var: dict):
+def save_json(path: str, var: dict) -> None:
     with open(path, 'w') as w:
         w.write(json.dumps(var, indent=4))
 
@@ -74,7 +95,7 @@ def daily_once(
             _job()
 
 
-def all_held_inc(held_operation_lock: threading.Lock, path: str):
+def all_held_inc(held_operation_lock: threading.Lock, path: str) -> None:
     with held_operation_lock:
         held_days = load_json(path)
 
@@ -85,7 +106,7 @@ def all_held_inc(held_operation_lock: threading.Lock, path: str):
         save_json(path, held_days)
 
 
-def new_held(held_operation_lock: threading.Lock, path: str, codes: List[str]):
+def new_held(held_operation_lock: threading.Lock, path: str, codes: List[str]) -> None:
     with held_operation_lock:
         held_days = load_json(path)
         for code in codes:
@@ -93,7 +114,7 @@ def new_held(held_operation_lock: threading.Lock, path: str, codes: List[str]):
         save_json(path, held_days)
 
 
-def del_held(held_operation_lock: threading.Lock, path: str, codes: List[str]):
+def del_held(held_operation_lock: threading.Lock, path: str, codes: List[str]) -> None:
     with held_operation_lock:
         held_days = load_json(path)
         for code in codes:
@@ -102,19 +123,13 @@ def del_held(held_operation_lock: threading.Lock, path: str, codes: List[str]):
         save_json(path, held_days)
 
 
-def get_all_historical_symbols():
-    with open(HISTORICAL_SYMBOLS, 'r') as r:
-        symbols = r.read().split('\n')
-    return symbols
-
-
-def check_today_is_open_day_by_df(df: pd.DataFrame, curr_date: str):
-    today_int = int(curr_date)
+def check_today_is_open_day_by_df(df: pd.DataFrame, today: str) -> bool:
+    today_int = int(today)
     result = df[df['cal_date'] == today_int]
     return result['is_open'].values[0] == 1
 
 
-def check_today_is_open_day(curr_date: str):
+def check_today_is_open_day(curr_date: str) -> bool:
     today = datetime.datetime.strptime(curr_date, '%Y-%m-%d').strftime('%Y%m%d')
     # 内存缓存
     if today in open_day_cache.keys():
@@ -125,7 +140,7 @@ def check_today_is_open_day(curr_date: str):
         df = pd.read_csv(OPEN_DAY_CACHE_PATH)
         if int(today) <= df['cal_date'].max():  # 文件缓存未过期
             open_day_cache[today] = check_today_is_open_day_by_df(df, today)
-            print(f'{today} is {open_day_cache[today]} open day in memory.')
+            print(f'[{today} is {open_day_cache[today]} open day in memory]', end='')
             return open_day_cache[today]
 
     # 网络缓存
@@ -145,3 +160,152 @@ def check_today_is_open_day(curr_date: str):
     print(f'{today} is {open_day_cache[today]} open day in memory.')
 
     return open_day_cache[today]
+
+
+def today_is_open_day():
+    today = int(datetime.datetime.now().strftime("%Y%m%d"))
+    return is_open_day(today)
+
+
+def get_open_day_list():
+    df = pd.read_csv(OPEN_DAY_CACHE_PATH)
+    ans = []
+    for index, row in df.iterrows():
+        if row['is_open'] == 1:
+            ans.append(row['cal_date'])
+    return ans
+
+
+def get_open_day_prev(target_day: int, delta_days: int):
+    arr = get_open_day_list()
+    index = arr.index(target_day) + delta_days
+    assert index < len(arr), '交易日历史不足，需要更久前数据'
+    return arr[index]
+
+
+def is_open_day(today: int):
+    return today in get_open_day_list()
+
+
+def get_stock_info(ts_code):
+    df = pd.read_csv(STOCK_LIST_PATH)
+    df = df[df["ts_code"] == ts_code]
+    return df.iloc[0].to_dict()
+
+
+def update_open_day_list(start_date, end_date):
+    pro = get_tushare_pro(0)
+    df = pro.trade_cal(exchange='', start_date=start_date, end_date=end_date)
+    df.to_csv(OPEN_DAY_CACHE_PATH)
+
+
+def update_current_open_day_list():
+    curr_year = datetime.datetime.now().year
+    next_year = curr_year + 1
+    update_open_day_list(str(curr_year) + '0101', str(next_year) + '1231')
+
+
+def update_stock_list():
+    pro = get_tushare_pro(0)
+    df = pro.stock_basic(exchange='', list_status='L', fields='ts_code, symbol, name, area, industry, list_date')
+    df.to_csv(STOCK_LIST_PATH, index=True)
+
+    with open(STOCK_LIST_TXT_PATH, 'w') as w:
+        print(df.columns.values)
+        s = ''
+        for value in df.columns.values:
+            s += str(value)
+            s += '\t'
+        w.write(s + '\n')
+        for index, row in df.iterrows():
+            s = ''
+            for key in row.index.values:
+                s += str(row[key])
+                s += '\t'
+            print(s)
+            w.write(s + '\n')
+
+    print(df)
+
+
+def refresh_historical_stock_list():
+    with open(HISTORICAL_SYMBOLS, 'r') as r:
+        symbols = r.read().split('\n')
+
+    stock_zh_a_spot_em_df = ak.stock_zh_a_spot_em()
+
+    for symbol in stock_zh_a_spot_em_df['代码'].values:
+        if symbol not in symbols:
+            print(symbol)
+            symbols.append(symbol)
+
+    symbols = sorted(symbols)
+
+    with open(HISTORICAL_SYMBOLS, 'w') as w:
+        w.write('\n'.join(symbols))
+
+
+def get_all_historical_symbols():
+    with open(HISTORICAL_SYMBOLS, 'r') as r:
+        symbols = r.read().split('\n')
+    return symbols
+
+
+def update_historical_open_days():
+    pro = get_tushare_pro(0)
+    df = pro.trade_cal(exchange='', start_date=19950101, end_date=20230101)
+    df.to_csv(HISTORICAL_OPEN_DAYS_PATH)
+
+
+def get_historical_open_days(start_date: str = None, end_date: str = None):
+    df = pd.read_csv(HISTORICAL_OPEN_DAYS_PATH)
+    df = df[df['is_open'] == 1]
+    df['date'] = df['cal_date'].astype(str)
+    if start_date is not None:
+        df = df[df['date'] >= start_date]
+    if end_date is not None:
+        df = df[df['date'] <= end_date]
+
+    df = df.reset_index()
+    return df
+
+
+def test_cache_held():
+    lock = threading.Lock()
+    path = '_cache/prod_debug/held_days.json'
+    new_held(lock, path, ['000001.SZ'])
+    all_held_inc(lock, path)
+
+
+def test_check_today_is_open_day():
+    test = check_today_is_open_day('2023-10-23')
+    print(test)
+
+
+def test_cache_pickle():
+    my_object = {'name': 'Alice', 'age': np.array([1, 2, 3, 4])}
+    save_pickle('_cache/prod_debug/test.pkl', my_object)
+
+    test = load_pickle('_cache/prod_debug/test.pkl')
+    print(type(test))
+    print(test['age'])
+
+
+if __name__ == '__main__':
+    # from tools.utils_basic import pd_show_all
+    # pd_show_all()
+
+    # update_open_day_list(
+    #     '20220101',
+    #     '20231231',
+    # )
+    # update_stock_list()
+    # update_current_open_day_list()
+
+    # update_historical_open_days()
+    # refresh_historical_stock_list()
+
+    # print(get_historical_open_days(end_date='20000101'))
+    # test_cache_held()
+    # test_check_today_is_open_day()
+    test_cache_pickle()
