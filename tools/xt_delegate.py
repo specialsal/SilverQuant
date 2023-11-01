@@ -8,6 +8,8 @@ from xtquant.xttrader import XtQuantTrader, XtQuantTraderCallback
 from xtquant.xttype import StockAccount, XtPosition, XtOrder, XtTrade, XtAsset, \
     XtOrderError, XtCancelError, XtOrderResponse, XtCancelOrderResponse, XtAccountStatus
 
+from tools.utils_basic import get_code_exchange
+
 
 default_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 default_account_id = '55009728'
@@ -213,6 +215,38 @@ def sell_all_positions(delegate: XtDelegate):
                 strategy_name='系统工具',
                 order_remark='一键卖空',
             )
+
+
+def order_submit(
+    order_type: int,
+    code: str,
+    curr_price: float,
+    order_volume: int,
+    order_remark: str,
+    order_premium: float = 0.0,
+    strategy_name: str = '',
+):
+    price_type = xtconstant.LATEST_PRICE
+    price = -1
+    if get_code_exchange(code) == 'SZ':
+        price_type = xtconstant.MARKET_SZ_CONVERT_5_CANCEL
+        price = -1
+    if get_code_exchange(code) == 'SH':
+        price_type = xtconstant.MARKET_PEER_PRICE_FIRST
+        if order_type == xtconstant.STOCK_SELL:
+            price = curr_price - order_premium
+        elif order_type == xtconstant.STOCK_BUY:
+            price = curr_price + order_premium
+
+    xt_delegate.order_submit(
+        stock_code=code,
+        order_type=order_type,
+        order_volume=order_volume,
+        price_type=price_type,
+        price=price,
+        strategy_name=strategy_name,
+        order_remark=order_remark,
+    )
 
 
 def is_position_holding(position: XtPosition):
