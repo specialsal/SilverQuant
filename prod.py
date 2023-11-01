@@ -33,7 +33,7 @@ TARGET_STOCK_PREFIX = [
 
 PATH_HELD = './_cache/prod/held_days.json'  # 记录持仓日期
 PATH_DATE = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
-PATH_LOGS = './_cache/prod/log.txt'         # 用来存储选股和委托操作
+PATH_LOGS = './_cache/prod/logs.txt'         # 用来存储选股和委托操作
 
 # ======== 全局变量 ========
 
@@ -141,12 +141,13 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
             # 如果有可用的买点，且无之前的委托则买入
-            if buy_volume > 0 and code not in cache_select[curr_date]:
-                order_submit(xtconstant.STOCK_BUY, code, price, buy_volume, '选股买单')
-                logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
+            if buy_volume > 0:
+                if curr_date not in cache_select or code not in cache_select[curr_date]:
+                    order_submit(xtconstant.STOCK_BUY, code, price, buy_volume, '选股买单')
+                    logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
 
         # 记录选股历史
-        if curr_date not in cache_select.keys():
+        if curr_date not in cache_select:
             cache_select[curr_date] = []
 
         for selection in selections:
