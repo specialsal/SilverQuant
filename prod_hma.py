@@ -225,7 +225,8 @@ def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]):
 
             # 如果有可用的买点，且无之前的委托则买入
             if buy_volume > 0:
-                if curr_date not in cache_select or code not in cache_select[curr_date]:
+                if (curr_date not in cache_select or code not in cache_select[curr_date]) \
+                        and (code not in [position.stock_code for position in positions]):  # 如果目前没有持仓则记录
                     order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
                                  '选股买单', p.order_premium, STRATEGY_NAME)
                     logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{round(price, 3)}')

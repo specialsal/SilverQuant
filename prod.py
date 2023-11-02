@@ -129,7 +129,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
 
         asset = xt_delegate.check_asset()
 
-        buy_count = max(0, p.max_count - get_holding_position_count(positions))       # 确认剩余的仓位
+        buy_count = max(0, p.max_count - get_holding_position_count(positions))  # 确认剩余的仓位
         buy_count = min(buy_count, asset.cash / p.amount_each)      # 确认现金够用
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
         buy_count = min(buy_count, 3)                               # 限每次最多买入数量
@@ -144,7 +144,7 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
             if buy_volume > 0:
                 if curr_date not in cache_select or code not in cache_select[curr_date]:
                     order_submit(xtconstant.STOCK_BUY, code, price, buy_volume, '选股买单')
-                    logging.warning(f'买入委托 {code} {buy_volume}股 现价:{price}')
+                    logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{round(price, 3)}')
 
         # 记录选股历史
         if curr_date not in cache_select:
@@ -176,22 +176,22 @@ def scan_sell(quotes: dict, positions: List[XtPosition], curr_time: str) -> None
                 # 判断持仓超过限制时间
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
                     # 不满足盈利的持仓平仓
-                    logging.warning(f'换仓委托 {code} {sell_volume}股 现价:{curr_price}')
+                    logging.warning(f'换仓委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '换仓卖单')
 
             if held_days[code] > 0:
                 # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:
                     # 止损卖出
-                    logging.warning(f'止损委托 {code} {sell_volume}股 现价:{round(curr_price, 3)}')
+                    logging.warning(f'止损委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止损卖单')
                 elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
                     # 止盈卖出：创业板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{round(curr_price, 3)}')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止盈卖单')
                 elif curr_price >= cost_price * p.upper_income:
                     # 止盈卖出：主板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股 现价:{round(curr_price, 3)}')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
                     order_submit(xtconstant.STOCK_SELL, code, curr_price, sell_volume, '止盈卖单')
 
 
