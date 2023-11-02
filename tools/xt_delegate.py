@@ -218,6 +218,7 @@ def sell_all_positions(delegate: XtDelegate):
 
 
 def order_submit(
+    delegate: XtDelegate,
     order_type: int,
     code: str,
     curr_price: float,
@@ -238,7 +239,7 @@ def order_submit(
         elif order_type == xtconstant.STOCK_BUY:
             price = curr_price + order_premium
 
-    xt_delegate.order_submit(
+    delegate.order_submit(
         stock_code=code,
         order_type=order_type,
         order_volume=order_volume,
