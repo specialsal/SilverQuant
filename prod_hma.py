@@ -59,7 +59,7 @@ cache_limits: Dict[str, str] = {
 class p:
     # 下单持仓
     switch_begin = '09:31'  # 每天最早换仓时间
-    hold_days = 0           # 持仓天数
+    hold_days = 1           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     order_premium = 0.05    # 保证成功下单成交的溢价
@@ -213,9 +213,10 @@ def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]):
         asset = xt_delegate.check_asset()
 
         buy_count = max(0, p.max_count - get_holding_position_count(positions))  # 确认剩余的仓位
-        buy_count = min(buy_count, asset.cash / p.amount_each)  # 确认现金够用
-        buy_count = min(buy_count, len(selections))  # 确认选出的股票够用
-        buy_count = min(buy_count, 3)  # 限每次最多买入数量
+        buy_count = min(buy_count, asset.cash // p.amount_each)     # 确认现金够用
+        buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
+        buy_count = min(buy_count, 3)                               # 限每次最多买入数量
+        buy_count = int(buy_count)
 
         # 依次买入
         for i in range(buy_count):

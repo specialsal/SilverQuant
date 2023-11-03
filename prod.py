@@ -130,9 +130,10 @@ def scan_buy(quotes: dict, positions: List[XtPosition], curr_date: str) -> None:
         asset = xt_delegate.check_asset()
 
         buy_count = max(0, p.max_count - get_holding_position_count(positions))  # 确认剩余的仓位
-        buy_count = min(buy_count, asset.cash / p.amount_each)      # 确认现金够用
+        buy_count = min(buy_count, asset.cash // p.amount_each)     # 确认现金够用
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
         buy_count = min(buy_count, 3)                               # 限每次最多买入数量
+        buy_count = int(buy_count)
 
         # 依次买入
         for i in range(buy_count):
