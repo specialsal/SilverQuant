@@ -224,8 +224,8 @@ def order_submit(
     curr_price: float,
     order_volume: int,
     order_remark: str,
-    order_premium: float = 0.0,
-    strategy_name: str = '',
+    order_premium: float = 0.01,
+    strategy_name: str = 'No Name',
 ):
     price_type = xtconstant.LATEST_PRICE
     price = -1
