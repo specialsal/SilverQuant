@@ -7,7 +7,8 @@ import datetime
 import threading
 from typing import List, Dict
 
-from xtquant import xtdata, xtconstant
+import talib as ta
+from xtquant import xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 from data_loader.ak_sample import get_new_stock_list_date
@@ -18,7 +19,7 @@ from tools.utils_cache import load_json, get_all_historical_symbols, daily_once,
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_subscriber import sub_whole_quote
-from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
+from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit, xt_stop_exit
 
 # ======== 策略常量 ========
 
@@ -35,6 +36,7 @@ TARGET_STOCK_PREFIX = [
 ]
 
 PATH_HELD = './_cache/prod/held_days.json'  # 记录持仓日期
+PATH_HIGH = './_cache/prod/top_price.json'  # 记录买入后历史最高价格，用来回落止盈
 PATH_DATE = './_cache/prod/curr_date.json'  # 用来标记每天执行一次任务的缓存
 PATH_LOGS = './_cache/prod/logs.txt'        # 用来存储选股和委托操作
 PATH_INFO = './_cache/prod/info-{}.pkl'     # 用来缓存当天计算的历史指标之类的信息
@@ -57,7 +59,7 @@ cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
 
 class p:
     # 下单持仓
-    switch_begin = '09:31'  # 每天最早换仓时间
+    daily_begin = '09:31'   # 每天最早换仓时间
     hold_days = 0           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
@@ -65,9 +67,9 @@ class p:
     upper_buy_count = 5     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
     upper_income_c = 1.28   # 止盈率:30开头创业板
-    upper_income = 1.168    # 止盈率
+    upper_income = 1.168    # 止盈率（ATR失效时使用）
     stop_income = 1.05      # 换仓阈值
-    lower_income = 0.94     # 止损率
+    lower_income = 0.94     # 止损率（ATR失效时使用）
     # 策略参数
     turn_red_upper = 1.025  # 翻红阈值上限，防止买太高
     turn_red_lower = 1.02   # 翻红阈值下限
@@ -75,8 +77,14 @@ class p:
     close_7_lower = 1.0     # 相对于七日前涨幅下限
     low_open = 0.98         # 低开阈值
     block_new_days = 60     # 限制新股发行的交易日时间
-    day_count = 7           # 7天前的收盘价
-    data_cols = ['close']   # 历史数据需要的列
+    # 历史指标
+    day_count = 15          # 获取14天前的收盘价，计算ATR和SMA
+    atr_day_count = 14      # 计算atr的天数
+    atr_upper_multi = 1.12  # 止盈str的乘数
+    atr_lower_multi = 0.85  # 止损str的乘数
+    sma_day_count = 3       # 计算sma的天数
+    base_close_day = 7      # 获取7天前的收盘价，用来限制历史涨幅
+    data_cols = ['close', 'high', 'low']    # 历史数据需要的列
 
 
 class MyCallback(XtBaseCallback):
@@ -123,6 +131,7 @@ def prepare_indicators(cache_path: str) -> None:
     temp_indicators = load_pickle(cache_path)
     if temp_indicators is not None:
         cache_indicators.update(temp_indicators)
+        print(f'Prepared indicators from {cache_path}')
     else:
         history_symbols = get_all_historical_symbols()
         history_codes = [
@@ -134,7 +143,7 @@ def prepare_indicators(cache_path: str) -> None:
         now = datetime.datetime.now()
 
         start = get_prev_trading_date(now, p.day_count)
-        end = get_prev_trading_date(now, p.day_count)
+        end = get_prev_trading_date(now, 1)
         print(f'Fetching qmt history data from {start} to {end}')
 
         t0 = datetime.datetime.now()
@@ -152,11 +161,19 @@ def prepare_indicators(cache_path: str) -> None:
                 columns=p.data_cols)
 
             for code in sub_codes:
-                row = data['close'].loc[code]
-                if not row.isna().any() and len(row) == 1:
+                row_close = data['close'].loc[code]
+                row_high = data['high'].loc[code]
+                row_low = data['low'].loc[code]
+
+                if not row_close.isna().any() and len(row_close) == p.day_count:
                     count += 1
+                    sma = get_yesterday_sma(row_close, p.sma_day_count)
+                    atr = get_yesterday_atr(row_close, row_high, row_low, p.atr_day_count)
+
                     cache_indicators[code] = {
-                        'CLOSE_7': row.head(p.day_count).values[0],
+                        'CLOSE_7': row_close.tail(p.base_close_day).head(1).values[0],
+                        'ATR_UPPER': sma + atr * p.atr_upper_multi,
+                        'ATR_LOWER': sma - atr * p.atr_lower_multi,
                     }
 
         t1 = datetime.datetime.now()
@@ -165,7 +182,21 @@ def prepare_indicators(cache_path: str) -> None:
         print(f'{count} stocks prepared.')
 
 
-def is_buy_point(quote: dict, indicator: dict) -> bool:
+def get_yesterday_sma(row_close, period) -> float:
+    close = row_close.tail(period).values
+    sma = ta.SMA(close, timeperiod=period)
+    return sma[-1]
+
+
+def get_yesterday_atr(row_close, row_high, row_low, period) -> float:
+    low = row_low.tail(period + 1).values
+    high = row_high.tail(period + 1).values
+    close = row_close.tail(period + 1).values
+    atr = ta.ATR(high, low, close, timeperiod=period)
+    return atr[-1]
+
+
+def decide_stock(quote: dict, indicator: dict) -> bool:
     last_close = quote['lastClose']
     curr_open = quote['open']
     curr_price = quote['lastPrice']
@@ -185,7 +216,7 @@ def select_stocks(quotes: dict) -> list[dict[str, any]]:
         if code not in cache_indicators:
             continue
 
-        passed = is_buy_point(quotes[code], cache_indicators[code])
+        passed = decide_stock(quotes[code], cache_indicators[code])
         if passed and code not in cache_blacklist:   # 如果不在黑名单
             selections.append({'code': code, 'price': quotes[code]["lastPrice"]})
     return selections
@@ -246,31 +277,44 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
             cost_price = position.open_price
             sell_volume = position.volume
 
-            if held_days[code] > p.hold_days and curr_time >= p.switch_begin:
-                # 判断持仓超过限制时间
+            # 换仓：未满足盈利目标的仓位
+            if held_days[code] > p.hold_days and curr_time >= p.daily_begin:
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
-                    # 不满足盈利的持仓平仓
                     logging.warning(f'换仓委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
                     order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
                                  '换仓卖单', p.order_premium, STRATEGY_NAME)
 
+            # 判断持仓超过一天
             if held_days[code] > 0:
-                # 判断持仓超过一天
-                if curr_price <= cost_price * p.lower_income:
-                    # 止损卖出
-                    logging.warning(f'止损委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
-                    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                 '止损卖单', p.order_premium, STRATEGY_NAME)
-                elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
-                    # 止盈卖出：创业板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
-                    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                 '止盈卖单', p.order_premium, STRATEGY_NAME)
-                elif curr_price >= cost_price * p.upper_income:
-                    # 止盈卖出：主板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
-                    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                 '止盈卖单', p.order_premium, STRATEGY_NAME)
+                if code in cache_indicators:
+                    if curr_price <= cache_indicators[code]['ATR_LOWER']:
+                        # ATR止损卖出
+                        logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}\t'
+                                        f'ATR止损线:{cache_indicators[code]["ATR_LOWER"]}')
+                        order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
+                                     'ATR止损卖单', p.order_premium, STRATEGY_NAME)
+                    elif curr_price >= cache_indicators[code]['ATR_UPPER']:
+                        # ATR止盈卖出
+                        logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}\t'
+                                        f'ATR止盈线:{cache_indicators[code]["ATR_UPPER"]}')
+                        order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
+                                     'ATR止盈卖单', p.order_premium, STRATEGY_NAME)
+                else:
+                    if curr_price <= cost_price * p.lower_income:
+                        # 止损卖出
+                        logging.warning(f'止损委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
+                        order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
+                                     '止损卖单', p.order_premium, STRATEGY_NAME)
+                    elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
+                        # 止盈卖出：创业板
+                        logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
+                        order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
+                                     '止盈卖单', p.order_premium, STRATEGY_NAME)
+                    elif curr_price >= cost_price * p.upper_income:
+                        # 止盈卖出：主板
+                        logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
+                        order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
+                                     '止盈卖单', p.order_premium, STRATEGY_NAME)
 
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
@@ -348,4 +392,4 @@ if __name__ == '__main__':
     print('启动行情订阅...')
     check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
     sub_whole_quote(callback_sub_whole)
-    xtdata.run()  # 死循环 阻塞主线程退出
+    xt_stop_exit()  # 死循环 阻塞主线程退出
