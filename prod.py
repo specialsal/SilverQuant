@@ -79,10 +79,10 @@ class p:
     block_new_days = 60     # 限制新股发行的交易日时间
     # 历史指标
     day_count = 15          # 获取14天前的收盘价，计算ATR和SMA
-    atr_day_count = 14      # 计算atr的天数
-    atr_upper_multi = 1.12  # 止盈str的乘数
-    atr_lower_multi = 0.85  # 止损str的乘数
-    sma_day_count = 3       # 计算sma的天数
+    atr_time_period = 14    # 计算atr的天数
+    atr_upper_multi = 1.12  # 止盈atr的乘数
+    atr_lower_multi = 0.85  # 止损atr的乘数
+    sma_time_period = 3     # 计算sma的天数
     base_close_day = 7      # 获取7天前的收盘价，用来限制历史涨幅
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
 
@@ -167,8 +167,8 @@ def prepare_indicators(cache_path: str) -> None:
 
                 if not row_close.isna().any() and len(row_close) == p.day_count:
                     count += 1
-                    sma = get_yesterday_sma(row_close, p.sma_day_count)
-                    atr = get_yesterday_atr(row_close, row_high, row_low, p.atr_day_count)
+                    sma = get_yesterday_sma(row_close, p.sma_time_period)
+                    atr = get_yesterday_atr(row_close, row_high, row_low, p.atr_time_period)
 
                     cache_indicators[code] = {
                         'CLOSE_7': row_close.tail(p.base_close_day).head(1).values[0],
