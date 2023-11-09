@@ -9,7 +9,7 @@ from typing import List, Dict
 
 import numpy as np
 import talib as ta
-from xtquant import xtdata, xtconstant
+from xtquant import xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 from data_loader.reader_xtdata import get_xtdata_market_dict
@@ -19,7 +19,7 @@ from tools.utils_cache import load_json, get_all_historical_symbols, daily_once,
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_subscriber import sub_whole_quote
-from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
+from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit, xt_stop_exit
 
 # ======== 策略常量 ========
 
@@ -27,7 +27,6 @@ STRATEGY_NAME = '银狐二号'
 
 QMT_CLIENT_PATH = r'C:\国金QMT交易端模拟\userdata_mini'
 QMT_ACCOUNT_ID = '55009728'
-# QMT_ACCOUNT_ID = '55010470'
 
 TARGET_STOCK_PREFIX = [
     '000', '001', '002', '003',
@@ -57,8 +56,8 @@ cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
 
 class p:
     # 下单持仓
-    switch_begin = '09:40'  # 每天最早换仓时间
-    hold_days = 0           # 持仓天数
+    switch_begin = '10:30'  # 每天最早换仓时间
+    hold_days = 1           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     order_premium = 0.05    # 保证成功下单成交的溢价
@@ -113,6 +112,7 @@ def prepare_indicators(cache_path: str) -> None:
     temp_indicators = load_pickle(cache_path)
     if temp_indicators is not None:
         cache_indicators.update(temp_indicators)
+        print(f'Prepared indicators from {cache_path}')
     else:
         history_symbols = get_all_historical_symbols()
         history_codes = [
@@ -142,11 +142,11 @@ def prepare_indicators(cache_path: str) -> None:
                 columns=p.data_cols)
 
             for code in sub_codes:
-                row = data['close'].loc[code]
-                if not row.isna().any() and len(row) == p.day_count:
+                row_close = data['close'].loc[code]
+                if not row_close.isna().any() and len(row_close) == p.day_count:
                     count += 1
                     cache_indicators[code] = {
-                        'past_69': row.tail(p.day_count).values,
+                        'past_69': row_close.tail(p.day_count).values,
                     }
 
         t1 = datetime.datetime.now()
@@ -166,7 +166,7 @@ def get_last_hma(data: np.array, n: int):
     return hma[-1:][0]
 
 
-def is_buy_point(quote: dict, indicator: dict) -> (bool, dict):
+def decide_stock(quote: dict, indicator: dict) -> (bool, dict):
     p_close = quote['lastPrice']
     p_open = quote['open']
 
@@ -200,7 +200,7 @@ def select_stocks(quotes: dict) -> list[dict[str, any]]:
         if code not in cache_indicators:
             continue
 
-        passed, info = is_buy_point(quotes[code], cache_indicators[code])
+        passed, info = decide_stock(quotes[code], cache_indicators[code])
         if passed:
             selection = {'code': code, 'price': quotes[code]["lastPrice"]}
             selection.update(info)
@@ -293,17 +293,15 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
 
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
-    # 预备
-    if '09:10' <= curr_time <= '09:14':
-        daily_once(
-            lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
-            curr_date, prepare_indicators, PATH_INFO.format(curr_date))
-
     # 盘前
     if '09:15' <= curr_time <= '09:29':
         daily_once(
             lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_held_inc',
             curr_date, held_increase)
+
+        daily_once(
+            lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
+            curr_date, prepare_indicators, PATH_INFO.format(curr_date))
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
@@ -366,4 +364,4 @@ if __name__ == '__main__':
     print('启动行情订阅...')
     check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
     sub_whole_quote(callback_sub_whole)
-    xtdata.run()  # 死循环 阻塞主线程退出
+    xt_stop_exit()  # 死循环 阻塞主线程退出
