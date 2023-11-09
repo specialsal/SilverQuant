@@ -4,6 +4,7 @@ from threading import Thread
 from typing import List
 
 from xtquant import xtconstant
+from xtquant.xtdata import get_client
 from xtquant.xttrader import XtQuantTrader, XtQuantTraderCallback
 from xtquant.xttype import StockAccount, XtPosition, XtOrder, XtTrade, XtAsset, \
     XtOrderError, XtCancelError, XtOrderResponse, XtCancelOrderResponse, XtAccountStatus
@@ -13,6 +14,9 @@ from tools.utils_basic import get_code_exchange
 
 default_client_path = r'C:\国金QMT交易端模拟\userdata_mini'
 default_account_id = '55009728'
+
+default_reconnect_duration = 60
+default_wait_duration = 15
 
 
 class XtDelegate:
@@ -71,7 +75,7 @@ class XtDelegate:
 
     def keep_connected(self) -> None:
         while True:
-            time.sleep(3)
+            time.sleep(default_reconnect_duration)
             self.reconnect()
 
     def order_submit(
@@ -268,6 +272,15 @@ def get_profit(delegate: XtDelegate):
             print(position.stock_code, profit)
             profits += profit
     print(profits)
+
+
+def xt_stop_exit():
+    import time
+    client = get_client()
+    while True:
+        time.sleep(default_wait_duration)
+        if not client.is_connected():
+            print('行情服务连接断开...')
 
 
 if __name__ == '__main__':

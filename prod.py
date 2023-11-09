@@ -26,8 +26,7 @@ from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_c
 STRATEGY_NAME = '布丁一号'
 
 QMT_CLIENT_PATH = r'C:\国金QMT交易端模拟\userdata_mini'
-QMT_ACCOUNT_ID = '55009728'
-# QMT_ACCOUNT_ID = '55010470'
+QMT_ACCOUNT_ID = '55010470'
 
 TARGET_STOCK_PREFIX = [
     '000', '001', '002', '003',
@@ -80,7 +79,7 @@ class p:
     # 历史指标
     day_count = 15          # 获取14天前的收盘价，计算ATR和SMA
     atr_time_period = 14    # 计算atr的天数
-    atr_upper_multi = 1.12  # 止盈atr的乘数
+    atr_upper_multi = 1.15  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数
     sma_time_period = 3     # 计算sma的天数
     base_close_day = 7      # 获取7天前的收盘价，用来限制历史涨幅
@@ -167,13 +166,14 @@ def prepare_indicators(cache_path: str) -> None:
 
                 if not row_close.isna().any() and len(row_close) == p.day_count:
                     count += 1
-                    sma = get_yesterday_sma(row_close, p.sma_time_period)
+                    last_close = row_close.tail(1).values[0]
+                    # sma = get_yesterday_sma(row_close, p.sma_time_period)
                     atr = get_yesterday_atr(row_close, row_high, row_low, p.atr_time_period)
 
                     cache_indicators[code] = {
                         'CLOSE_7': row_close.tail(p.base_close_day).head(1).values[0],
-                        'ATR_UPPER': sma + atr * p.atr_upper_multi,
-                        'ATR_LOWER': sma - atr * p.atr_lower_multi,
+                        'ATR_UPPER': last_close + atr * p.atr_upper_multi,
+                        'ATR_LOWER': last_close - atr * p.atr_lower_multi,
                     }
 
         t1 = datetime.datetime.now()
@@ -318,12 +318,6 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
 
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
-    # 预备
-    if '09:10' <= curr_time <= '09:14':
-        daily_once(
-            lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
-            curr_date, prepare_indicators, PATH_INFO.format(curr_date))
-
     # 盘前
     if '09:15' <= curr_time <= '09:29':
         daily_once(
@@ -333,6 +327,11 @@ def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
         daily_once(
             lock_daily_cronjob, cache_limits, None, '_daily_once_refresh_blacklist',
             curr_date, refresh_blacklist)
+
+        daily_once(
+            lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
+            curr_date, prepare_indicators, PATH_INFO.format(curr_date))
+
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
