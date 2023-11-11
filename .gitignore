@@ -160,3 +160,9 @@ cython_debug/
 
 .idea/
 
+_cache/prod_dk/
+_cache/staging_dk/
+_cache/prod_hma/
+_cache/staging_hma/
+
+_cache/staging_sma/
