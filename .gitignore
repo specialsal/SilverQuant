@@ -160,6 +160,3 @@ cython_debug/
 
 .idea/
 
-_cache/prod/
-_cache/prod_hma/
-_cache/prod_sma/

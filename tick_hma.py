@@ -1,6 +1,7 @@
 """
 TODO:
 """
+import time
 import math
 import logging
 import datetime
@@ -12,6 +13,7 @@ import talib as ta
 from xtquant import xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
+import tick_accounts
 from data_loader.reader_xtdata import get_xtdata_market_dict
 from tools.utils_basic import logging_init, symbol_to_code
 from tools.utils_cache import load_json, get_all_historical_symbols, daily_once, \
@@ -21,36 +23,35 @@ from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_subscriber import sub_whole_quote
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit, xt_stop_exit
 
-# ======== 策略常量 ========
-
+# ======== 配置 ========
 STRATEGY_NAME = '银狐二号'
+QMT_ACCOUNT_ID = tick_accounts.YH_QMT_ACCOUNT_ID
+QMT_CLIENT_PATH = tick_accounts.YH_QMT_CLIENT_PATH
 
-QMT_CLIENT_PATH = r'C:\国金QMT交易端模拟\userdata_mini'
-QMT_ACCOUNT_ID = '55009728'
+PATH_BASE = tick_accounts.YH_CACHE_BASE_PATH
+PATH_HELD = PATH_BASE + '/held_days.json'   # 记录持仓日期
+PATH_DATE = PATH_BASE + '/curr_date.json'   # 用来标记每天一次的缓存
+PATH_LOGS = PATH_BASE + '/logs.txt'         # 用来存储选股和委托操作
+PATH_INFO = PATH_BASE + '/info-{}.pkl'      # 用来缓存当天的指标信息
 
-TARGET_STOCK_PREFIX = [
-    '000', '001', '002', '003',
-    # '300', '301',
-    '600', '601', '603', '605',
-]
+lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
+lock_held_op_cache = threading.Lock()       # 操作持仓数据缓存的锁
+lock_daily_cronjob = threading.Lock()       # 标记每天一次执行的锁
 
-PATH_HELD = './_cache/prod_hma/held_days.json'  # 记录持仓日期
-PATH_DATE = './_cache/prod_hma/curr_date.json'  # 用来标记每天执行一次任务的缓存
-PATH_LOGS = './_cache/prod_hma/logs.txt'        # 用来存储选股和委托操作
-PATH_INFO = './_cache/prod_hma/info-{}.pkl'     # 用来缓存当天计算的历史指标之类的信息
-
-# ======== 全局变量 ========
-
-lock_quotes_update = threading.Lock()  # 更新quotes缓存用的锁
-lock_held_op_cache = threading.Lock()  # 操作held缓存用的锁
-lock_daily_cronjob = threading.Lock()  # 记录每天一次执行的锁
-
-cache_quotes: Dict[str, Dict] = {}                  # 记录实时价格信息
-cache_select: Dict[str, set] = {}                   # 记录选股历史，目的是为了去重
-cache_indicators: Dict[str, Dict[str, any]] = {}    # 记录历史技术指标信息
+cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
+cache_select: Dict[str, set] = {}           # 记录选股历史，去重
+cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
 cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
-    'prev_datetime': '',            # 限制每秒执行一次的缓存
-    'prev_minutes': '',             # 限制每分钟屏幕打印心跳换行的缓存
+    'prev_datetime': '',            # 限制每秒一次跑策略扫描的缓存
+    'prev_minutes': '',             # 限制每分钟屏幕心跳换行的缓存
+}
+
+# ======== 策略 ========
+target_stock_prefixes = {  # set
+    '000', '001', '002', '003',
+    # '300', '301',  # 创业板
+    '600', '601', '603', '605',
+    # '688', '689',  # 科创板
 }
 
 
@@ -66,12 +67,13 @@ class p:
     upper_income_c = 1.09   # 止盈率:30开头创业板
     upper_income = 1.09     # 止盈率
     stop_income = 1.05      # 换仓阈值
-    lower_income = 0.96     # 止损率
+    lower_income = 0.97     # 止损率
     # 策略参数
     S = 20
     M = 40
     N = 60
-    open_inc = 0.02         # 相对于开盘价涨幅阈值
+    open_inc = 1.00         # 相对于开盘价涨幅阈值
+    inc_limit = 0.05        # 相对于昨日收盘的涨幅限制
     day_count = 69          # 70个足够算出周期为60的 HMA
     data_cols = ['close']   # 历史数据需要的列
 
@@ -79,13 +81,13 @@ class p:
 class MyCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
         if trade.order_type == xtconstant.STOCK_BUY:
-            log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
+            log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price:.3f}'
             logging.warning(log)
             sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0)
             new_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
-            log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{round(trade.traded_price, 3)}'
+            log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price:.3f}'
             logging.warning(log)
             sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0)
             del_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
@@ -108,6 +110,16 @@ def held_increase():
     print(f'All held stock day +1!')
 
 
+def calculate_indicators(market_dict: Dict, code: str) -> int:
+    row_close = market_dict['close'].loc[code]
+    if not row_close.isna().any() and len(row_close) == p.day_count:
+        cache_indicators[code] = {
+            'past_69': row_close.tail(p.day_count).values,
+        }
+        return 1
+    return 0
+
+
 def prepare_indicators(cache_path: str) -> None:
     temp_indicators = load_pickle(cache_path)
     if temp_indicators is not None:
@@ -118,7 +130,7 @@ def prepare_indicators(cache_path: str) -> None:
         history_codes = [
             symbol_to_code(symbol)
             for symbol in history_symbols
-            if symbol[:3] in TARGET_STOCK_PREFIX
+            if symbol[:3] in target_stock_prefixes
         ]
 
         now = datetime.datetime.now()
@@ -130,28 +142,22 @@ def prepare_indicators(cache_path: str) -> None:
         t0 = datetime.datetime.now()
         group_size = 500
         count = 0
-
-        # 获取需要的历史数据
         for i in range(0, len(history_codes), group_size):
             sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
             print(f'Preparing {sub_codes}')
-            data = get_xtdata_market_dict(
+            market_dict = get_xtdata_market_dict(
                 codes=sub_codes,
                 start_date=start,
                 end_date=end,
                 columns=p.data_cols)
+            time.sleep(0.5)
 
             for code in sub_codes:
-                row_close = data['close'].loc[code]
-                if not row_close.isna().any() and len(row_close) == p.day_count:
-                    count += 1
-                    cache_indicators[code] = {
-                        'past_69': row_close.tail(p.day_count).values,
-                    }
+                count += calculate_indicators(market_dict, code)
 
         t1 = datetime.datetime.now()
         save_pickle(cache_path, cache_indicators)
-        print(f'Preparing time cost: {t1 - t0}')
+        print(f'Preparing TIME COST: {t1 - t0}')
         print(f'{count} stocks prepared.')
 
 
@@ -194,7 +200,7 @@ def decide_stock(quote: dict, indicator: dict) -> (bool, dict):
 def select_stocks(quotes: dict) -> list[dict[str, any]]:
     selections = []
     for code in quotes:
-        if code[:3] not in TARGET_STOCK_PREFIX:
+        if code[:3] not in target_stock_prefixes:
             continue
 
         if code not in cache_indicators:
@@ -235,7 +241,7 @@ def scan_buy(selections: list, curr_date: str, positions: List[XtPosition]) -> N
                 # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
                 order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
                              '选股买单', p.order_premium, STRATEGY_NAME)
-                logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{round(price, 3)}')
+                logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
 
         # 记录选股历史
         if curr_date not in cache_select:
@@ -269,7 +275,7 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
                 # 判断持仓超过限制时间
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
                     # 不满足盈利的持仓平仓
-                    logging.warning(f'换仓委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
+                    logging.warning(f'换仓委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
                     order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
                                  '换仓卖单', p.order_premium, STRATEGY_NAME)
 
@@ -277,17 +283,17 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
                 # 判断持仓超过一天
                 if curr_price <= cost_price * p.lower_income:
                     # 止损卖出
-                    logging.warning(f'止损委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
+                    logging.warning(f'止损委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
                     order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
                                  '止损卖单', p.order_premium, STRATEGY_NAME)
                 elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
                     # 止盈卖出：创业板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
                     order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
                                  '止盈卖单', p.order_premium, STRATEGY_NAME)
                 elif curr_price >= cost_price * p.upper_income:
                     # 止盈卖出：主板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{round(curr_price, 3)}')
+                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
                     order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
                                  '止盈卖单', p.order_premium, STRATEGY_NAME)
 

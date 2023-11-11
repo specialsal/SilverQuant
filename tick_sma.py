@@ -5,7 +5,7 @@ import logging
 import datetime
 import threading
 
-from typing import List, Dict
+from typing import Dict
 
 from xtquant import xtdata
 from data_loader.reader_xtdata import get_xtdata_market_dict
@@ -15,35 +15,33 @@ from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_subscriber import sub_whole_quote
 # from tools.xt_delegate import XtDelegate
 
-# ======== 策略常量 ========
-
+# ======== 配置 ========
 STRATEGY_NAME = '银狐一号'
+# QMT_ACCOUNT_ID = '55009728'
+# QMT_CLIENT_PATH = r'C:\国金QMT交易端模拟\userdata_mini'
 
-QMT_CLIENT_PATH = r'C:\国金QMT交易端模拟\userdata_mini'
-QMT_ACCOUNT_ID = '55009728'
-# QMT_ACCOUNT_ID = '55010470'
+PATH_BASE = '_cache/staging_sma'
+PATH_HELD = PATH_BASE + '/held_days.json'   # 记录持仓日期
+PATH_DATE = PATH_BASE + '/curr_date.json'   # 用来标记每天一次的缓存
+PATH_LOGS = PATH_BASE + '/log.txt'          # 用来存储选股和委托操作
 
-TARGET_STOCK_PREFIX = [
+lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
+lock_daily_cronjob = threading.Lock()       # 标记每天一次执行的锁
+
+cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
+cache_select: Dict[str, set] = {}           # 记录选股历史，去重
+cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
+cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
+    'prev_datetime': '',            # 限制每秒一次跑策略扫描的缓存
+    'prev_minutes': '',             # 限制每分钟屏幕心跳换行的缓存
+}
+
+# ======== 策略 ========
+target_stock_prefixes = {  # set
     '000', '001', '002', '003',
-    '300', '301',
+    # '300', '301',  # 创业板
     '600', '601', '603', '605',
-]
-
-PATH_HELD = '_cache/prod_sma/held_days.json'  # 记录持仓日期
-PATH_DATE = '_cache/prod_sma/curr_date.json'  # 用来标记每天执行一次任务的缓存
-PATH_LOGS = '_cache/prod_sma/log.txt'           # 用来存储选股和委托操作
-
-# ======== 全局变量 ========
-
-lock_quotes_update = threading.Lock()    # 更新quotes缓存用的锁
-lock_daily_prepare = threading.Lock()    # 每天更新历史数据用的锁
-
-cache_quotes: Dict[str, Dict] = {}                  # 记录实时价格信息
-cache_select: Dict[str, List] = {}                  # 记录选股历史，目的是为了去重
-cache_indicators: Dict[str, Dict[str, any]] = {}    # 记录历史技术指标信息
-cache_limits: Dict[str, str] = {
-    'prev_datetime': '',    # 限制每秒执行一次的缓存
-    'prev_minutes': '',     # 限制每分钟屏幕打印心跳的缓存
+    # '688', '689',  # 科创板
 }
 
 
@@ -59,7 +57,7 @@ def prepare_indicator_source() -> dict:
     history_codes = [
         symbol_to_code(symbol)
         for symbol in history_symbols
-        if symbol[:3] in TARGET_STOCK_PREFIX
+        if symbol[:3] in target_stock_prefixes
     ]
 
     now = datetime.datetime.now()
@@ -126,7 +124,7 @@ def stock_selection(quote: dict, indicator: dict) -> (bool, dict):
 def scan_buy(quotes: dict, curr_date: str):
     selections = []
     for code in quotes:
-        if code[:3] not in TARGET_STOCK_PREFIX:
+        if code[:3] not in target_stock_prefixes:
             continue
 
         if code not in cache_indicators:
@@ -159,7 +157,7 @@ def execute_strategy(curr_date, curr_time, quotes):
     # 预备
     if '09:10' <= curr_time <= '09:14':
         daily_once(
-            lock_daily_prepare, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
+            lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
             curr_date, prepare_indicator_source)
 
     # 早盘
@@ -201,14 +199,14 @@ if __name__ == '__main__':
     logging_init(path=PATH_LOGS, level=logging.INFO)
 
     # xt_delegate = XtDelegate(
-    #     account_id=my_account_id,
-    #     client_path=my_client_path,
+    #     account_id=QMT_ACCOUNT_ID,
+    #     client_path=QMT_CLIENT_PATH,
     #     xt_callback=None,
     # )
 
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     daily_once(
-        lock_daily_prepare, cache_limits, None, '_daily_once_prepare_ind',
+        lock_daily_cronjob, cache_limits, None, '_daily_once_prepare_ind',
         today, prepare_indicator_source)
 
     print('启动行情订阅...')

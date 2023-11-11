@@ -1,7 +1,7 @@
 import time
 import traceback
 import pandas as pd
-from typing import List
+from typing import List, Dict
 
 from xtquant import xtdata
 
@@ -32,11 +32,11 @@ def pre_download(start_date: str, end_date: str):
 
 def get_xtdata_market_dict(
     codes: List[str],
-    period: str = '1d',  # 1m 5m 1d
     start_date: str = '',
     end_date: str = '',
     columns: List[str] = None,
-) -> pd.DataFrame:
+    period: str = '1d',  # 1m 5m 1d
+) -> Dict[str, pd.DataFrame]:
     if columns is None:
         columns = ['open', 'close', 'high', 'low', 'volume']
 
@@ -69,17 +69,14 @@ def get_xtdata_market_datas(
         columns = ['open', 'close', 'high', 'low', 'volume']
 
     try:
-        temp_dict = get_xtdata_market_dict(codes, period, start_date, end_date, columns)
+        temp_dict = get_xtdata_market_dict(codes, start_date, end_date, columns, period)
 
         temp_list = []
         for code in codes:
             df = pd.concat([temp_dict[col].loc[code] for col in columns], axis=1)
             df.columns = columns
-            df['open'] = df['open'].round(3)
-            df['close'] = df['close'].round(3)
-            df['high'] = df['high'].round(3)
-            df['low'] = df['low'].round(3)
-            df['volume'] = df['volume'].round(2)
+            for column in columns:
+                df[column] = df[column].round(3)
             df = df.rename_axis('date')
             temp_list.append(df)
         ans = pd.concat(temp_list, axis=1, keys=codes)
@@ -97,16 +94,40 @@ def full_tick(codes: List[str]):
 
 def test_get_market():
     ts_code_1 = '000002.SZ'
-    ts_code_2 = '600001.SH'
+    ts_code_2 = '600519.SH'
 
-    a, _ = get_xtdata_market_datas(
+    data = get_xtdata_market_dict(
         [ts_code_1, ts_code_2],
         period='1d',
-        start_date='20220703',
-        end_date='20230710',
+        start_date='20230701',
+        end_date='20230731',
+        columns=['close', 'high', 'low']
     )
-    # print(a)
-    print(a[ts_code_1])
+    import talib as ta
+
+    row_close = data['close'].loc[ts_code_1]
+    row_high = data['high'].loc[ts_code_1]
+    row_low = data['low'].loc[ts_code_1]
+
+    period = 7
+    low = row_low.tail(period + 1).values
+    high = row_high.tail(period + 1).values
+    close = row_close.tail(period + 1).values
+    atr = ta.ATR(high, low, close, timeperiod=period)
+    print(atr[-1])
+
+    period = 3
+    close = row_close.tail(period).values
+    sma3 = ta.SMA(close, timeperiod=period)
+    print(sma3[-1])
+
+    # a, _ = get_xtdata_market_datas(
+    #     [ts_code_1, ts_code_2],
+    #     period='1d',
+    #     start_date='20220703',
+    #     end_date='20230710',
+    # )
+    # print(a[ts_code_1])
 
 
 if __name__ == '__main__':
@@ -114,5 +135,5 @@ if __name__ == '__main__':
     pd_show_all()
 
     # pre_download()
-    # test_get_market()
-    print(full_tick(['000001.SZ', '000002.SZ']))
+    # print(full_tick(['000001.SZ', '000002.SZ']))
+    test_get_market()
