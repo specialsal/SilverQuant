@@ -8,6 +8,7 @@ import datetime
 import threading
 from typing import List, Dict
 
+import numpy as np
 import talib as ta
 from xtquant import xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
@@ -24,7 +25,7 @@ from tools.xt_subscriber import sub_whole_quote
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit, xt_stop_exit
 
 # ======== 配置 ========
-STRATEGY_NAME = '布丁一号'
+STRATEGY_NAME = '布丁二号'
 QMT_ACCOUNT_ID = tick_accounts.BD_QMT_ACCOUNT_ID
 QMT_CLIENT_PATH = tick_accounts.BD_QMT_CLIENT_PATH
 
@@ -65,6 +66,7 @@ class p:
     order_premium = 0.05    # 保证成功下单成交的溢价
     upper_buy_count = 5     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
+    upper_income_c = 1.28   # 止盈率:30开头创业板
     upper_income = 1.168    # 止盈率（ATR失效时使用）
     stop_income = 1.05      # 换仓阈值
     lower_income = 0.94     # 止损率（ATR失效时使用）
@@ -141,22 +143,15 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
     row_low = market_dict['low'].loc[code]
 
     if not row_close.isna().any() and len(row_close) == p.day_count:
-        # last_close = row_close.tail(1).values[0]
-
-        close = row_close.tail(p.sma_time_period).values
-        sma = get_sma(close, p.sma_time_period)
-
-        low = row_low.tail(p.atr_time_period + 1).values
-        high = row_high.tail(p.atr_time_period + 1).values
-        close = row_close.tail(p.atr_time_period + 1).values
-        atr = get_atr(close, high, low, p.atr_time_period)
+        close_3d = row_close.tail(3).values
+        high_3d = row_high.tail(3).values
+        low_3d = row_low.tail(3).values
 
         cache_indicators[code] = {
             'CLOSE_7': row_close.tail(p.base_close_day).head(1).values[0],
-            # 'ATR_UPPER': last_close + atr * p.atr_upper_multi,
-            # 'ATR_LOWER': last_close - atr * p.atr_lower_multi,
-            'ATR_UPPER': sma + atr * p.atr_upper_multi,
-            'ATR_LOWER': sma - atr * p.atr_lower_multi,
+            'CLOSE_3D': close_3d,
+            'HIGH_3D': high_3d,
+            'LOW_3D': low_3d,
         }
         return 1
     return 0
@@ -293,29 +288,41 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
 
             # 判断持仓超过一天
             if held_days[code] > 0:
-                if code in cache_indicators:
+                if (code in quotes) and (code in cache_indicators):
                     if curr_price <= cost_price * p.lower_income:
-                        # 绝对止损卖出
+                        # 止损卖出
                         logging.warning(f'ABS止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}')
                         order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
                                      'ABS止损卖单', p.order_premium, STRATEGY_NAME)
                     elif curr_price >= cost_price * p.upper_income:
-                        # 绝对止盈卖出
-                        logging.warning(f'ABS止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}')
+                        # 止盈卖出
+                        logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}')
                         order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                     'ABS止盈卖单', p.order_premium, STRATEGY_NAME)
-                    elif curr_price <= cache_indicators[code]['ATR_LOWER']:
-                        # ATR止损卖出
-                        logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                        f'ATR止损线:{cache_indicators[code]["ATR_LOWER"]}')
-                        order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                     'ATR止损卖单', p.order_premium, STRATEGY_NAME)
-                    elif curr_price >= cache_indicators[code]['ATR_UPPER']:
-                        # ATR止盈卖出
-                        logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                        f'ATR止盈线:{cache_indicators[code]["ATR_UPPER"]}')
-                        order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                     'ATR止盈卖单', p.order_premium, STRATEGY_NAME)
+                                     'DEF止盈卖单', p.order_premium, STRATEGY_NAME)
+                    else:
+                        quote = quotes[code]
+                        close = np.append(cache_indicators[code]['CLOSE_3D'], quote['lastPrice'])
+                        high = np.append(cache_indicators[code]['HIGH_3D'], quote['high'])
+                        low = np.append(cache_indicators[code]['LOW_3D'], quote['low'])
+
+                        sma = get_sma(close, p.sma_time_period)
+                        atr = get_atr(close, high, low, p.atr_time_period)
+
+                        atr_upper = sma + atr * p.atr_upper_multi
+                        atr_lower = sma - atr * p.atr_lower_multi
+
+                        if curr_price <= atr_lower:
+                            # ATR止损卖出
+                            logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                            f'ATR止损线:{cache_indicators[code]["ATR_LOWER"]}')
+                            order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
+                                         'ATR止损卖单', p.order_premium, STRATEGY_NAME)
+                        elif curr_price >= atr_upper:
+                            # ATR止盈卖出
+                            logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                            f'ATR止盈线:{cache_indicators[code]["ATR_UPPER"]}')
+                            order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
+                                         'ATR止盈卖单', p.order_premium, STRATEGY_NAME)
                 else:
                     if curr_price <= cost_price * p.lower_income:
                         # 止损卖出
@@ -324,7 +331,7 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
                                      'DEF止损卖单', p.order_premium, STRATEGY_NAME)
                     elif curr_price >= cost_price * p.upper_income:
                         # 止盈卖出
-                        logging.warning(f'DEF止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}')
+                        logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}')
                         order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
                                      'DEF止盈卖单', p.order_premium, STRATEGY_NAME)
 

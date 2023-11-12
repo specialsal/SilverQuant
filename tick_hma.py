@@ -176,9 +176,6 @@ def decide_stock(quote: dict, indicator: dict) -> (bool, dict):
     p_close = quote['lastPrice']
     p_open = quote['open']
 
-    if not p_close > p_open:
-        return False, {}
-
     if not p_close > p_open * p.open_inc:
         return False, {}
 
