@@ -57,16 +57,16 @@ target_stock_prefixes = {  # set
 
 class p:
     # 下单持仓
-    switch_begin = '10:30'  # 每天最早换仓时间
-    hold_days = 1           # 持仓天数
+    switch_begin = '09:45'  # 每天最早换仓时间
+    hold_days = 3           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     order_premium = 0.05    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
-    upper_income = 1.09     # 止盈率（ATR失效时使用）
+    upper_income = 1.25     # 止盈率（ATR失效时使用）
     stop_income = 1.05      # 换仓阈值
-    lower_income = 0.97     # 止损率（ATR失效时使用）
+    lower_income = 0.96     # 止损率（ATR失效时使用）
     atr_time_period = 3     # 计算atr的天数
     atr_upper_multi = 1.25  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数
