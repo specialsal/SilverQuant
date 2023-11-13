@@ -77,7 +77,7 @@ class p:
     block_new_days = 60     # 限制新股发行的交易日时间
     # 历史指标
     day_count = 15          # 获取14天前的收盘价，计算ATR和SMA
-    atr_time_period = 14    # 计算atr的天数
+    atr_time_period = 3     # 计算atr的天数
     atr_upper_multi = 1.15  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数
     sma_time_period = 3     # 计算sma的天数

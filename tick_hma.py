@@ -64,30 +64,35 @@ class p:
     order_premium = 0.05    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
-    upper_income_c = 1.09   # 止盈率:30开头创业板
-    upper_income = 1.09     # 止盈率
+    upper_income = 1.09     # 止盈率（ATR失效时使用）
     stop_income = 1.05      # 换仓阈值
-    lower_income = 0.97     # 止损率
+    lower_income = 0.97     # 止损率（ATR失效时使用）
+    atr_time_period = 3     # 计算atr的天数
+    atr_upper_multi = 1.25  # 止盈atr的乘数
+    atr_lower_multi = 0.85  # 止损atr的乘数
+    sma_time_period = 3     # 卖点sma的天数
     # 策略参数
-    S = 20
-    M = 40
-    N = 60
+    L = 20                  # 选股HMA短周期
+    M = 40                  # 选股HMA中周期
+    N = 60                  # 选股HMA长周期
+    S = 20                  # 选股SMA周期
     open_inc = 1.00         # 相对于开盘价涨幅阈值
     inc_limit = 0.05        # 相对于昨日收盘的涨幅限制
+    # 历史指标
     day_count = 69          # 70个足够算出周期为60的 HMA
-    data_cols = ['close']   # 历史数据需要的列
+    data_cols = ['close', 'high', 'low']    # 历史数据需要的列
 
 
 class MyCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
         if trade.order_type == xtconstant.STOCK_BUY:
-            log = f'买入成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price:.3f}'
+            log = f'买入成交 {trade.stock_code} {trade.traded_volume}股\t均价:{trade.traded_price:.3f}'
             logging.warning(log)
             sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0)
             new_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
-            log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股 均价:{trade.traded_price:.3f}'
+            log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股\t均价:{trade.traded_price:.3f}'
             logging.warning(log)
             sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0)
             del_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
@@ -112,9 +117,19 @@ def held_increase():
 
 def calculate_indicators(market_dict: Dict, code: str) -> int:
     row_close = market_dict['close'].loc[code]
+    row_high = market_dict['high'].loc[code]
+    row_low = market_dict['low'].loc[code]
+
     if not row_close.isna().any() and len(row_close) == p.day_count:
+        close_3d = row_close.tail(p.atr_time_period).values
+        high_3d = row_high.tail(p.atr_time_period).values
+        low_3d = row_low.tail(p.atr_time_period).values
+
         cache_indicators[code] = {
-            'past_69': row_close.tail(p.day_count).values,
+            'PAST_69': row_close.tail(p.day_count).values,
+            'CLOSE_3D': close_3d,
+            'HIGH_3D': high_3d,
+            'LOW_3D': low_3d,
         }
         return 1
     return 0
@@ -161,7 +176,7 @@ def prepare_indicators(cache_path: str) -> None:
         print(f'{count} stocks prepared.')
 
 
-def get_last_hma(data: np.array, n: int):
+def get_last_hma(data: np.array, n: int) -> float:
     wma1 = ta.WMA(data, timeperiod=n // 2)
     wma2 = ta.WMA(data, timeperiod=n)
     sqrt_n = int(np.sqrt(n))
@@ -172,26 +187,37 @@ def get_last_hma(data: np.array, n: int):
     return hma[-1:][0]
 
 
+def get_last_sma(data: np.array, n: int) -> float:
+    sma = ta.SMA(data, timeperiod=n)
+    print(sma)
+    return sma[-1:][0]
+
+
 def decide_stock(quote: dict, indicator: dict) -> (bool, dict):
-    p_close = quote['lastPrice']
-    p_open = quote['open']
+    curr_close = quote['lastPrice']
+    curr_open = quote['open']
+    last_close = quote['lastClose']
 
-    if not p_close > p_open * p.open_inc:
+    if not curr_close > curr_open * p.open_inc:
         return False, {}
 
-    ma_60 = get_last_hma(np.append(indicator['past_69'], [p_close]), p.N)
-    if not (p_open < ma_60 < p_close):
+    sma20 = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
+    if not (sma20 < last_close):
         return False, {}
 
-    ma_40 = get_last_hma(np.append(indicator['past_69'], [p_close]), p.M)
-    if not (p_open < ma_40 < p_close):
+    hma60 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
+    if not (curr_open < hma60 < curr_close):
         return False, {}
 
-    ma_20 = get_last_hma(np.append(indicator['past_69'], [p_close]), p.S)
-    if not (p_open < ma_20 < p_close):
+    hma40 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.M)
+    if not (curr_open < hma40 < curr_close):
         return False, {}
 
-    return True, {'hma20': ma_20, 'hma40': ma_40, 'hma60': ma_60}
+    hma20 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.L)
+    if not (curr_open < hma20 < curr_close):
+        return False, {}
+
+    return True, {'hma20': hma20, 'hma40': hma40, 'hma60': hma60, 'sma20': sma20}
 
 
 def select_stocks(quotes: dict) -> list[dict[str, any]]:
@@ -247,13 +273,30 @@ def scan_buy(selections: list, curr_date: str, positions: List[XtPosition]) -> N
         for selection in selections:
             if selection['code'] not in cache_select[curr_date]:
                 cache_select[curr_date].add(selection['code'])
-                logging.warning('选股 {}\t现价: {}\tHMA 20: {}\tHMA 40: {}\tHMA 60: {}'.format(
-                    selection['code'],
-                    round(selection['price'], 2),
-                    round(selection['hma20'], 2),
-                    round(selection['hma40'], 2),
-                    round(selection['hma60'], 2),
-                ))
+                logging.warning(
+                    f"记录选股 {selection['code']}"
+                    f"\t现价: {selection['price']:.2f}"
+                    f"\tHMA_20: {selection['hma20']:.2f}"
+                    f"\tHMA_40: {selection['hma40']:.2f}"
+                    f"\tHMA_60: {selection['hma60']:.2f}"
+                    f"\tSMA_20: {selection['sma20']:.2f}"
+                )
+
+
+def get_sma(row_close, period) -> float:
+    sma = ta.SMA(row_close, timeperiod=period)
+    return sma[-1]
+
+
+def get_atr(row_close, row_high, row_low, period) -> float:
+    atr = ta.ATR(row_high, row_low, row_close, timeperiod=period)
+    return atr[-1]
+
+
+def order_sell(code, price, volume, remark, log=True):
+    if log:
+        logging.warning(f'{remark} {code} {volume}股\t现价:{price:.3f}')
+    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, price, volume, remark, p.order_premium, STRATEGY_NAME)
 
 
 def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None:
@@ -268,31 +311,49 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
             cost_price = position.open_price
             sell_volume = position.volume
 
+            # 换仓：未满足盈利目标的仓位
             if held_days[code] > p.hold_days and curr_time >= p.switch_begin:
-                # 判断持仓超过限制时间
                 if cost_price * p.lower_income < curr_price < cost_price * p.stop_income:
-                    # 不满足盈利的持仓平仓
-                    logging.warning(f'换仓委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
-                    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                 '换仓卖单', p.order_premium, STRATEGY_NAME)
+                    order_sell(code, curr_price, sell_volume, '换仓卖单')
 
+            # 判断持仓超过一天
             if held_days[code] > 0:
-                # 判断持仓超过一天
-                if curr_price <= cost_price * p.lower_income:
-                    # 止损卖出
-                    logging.warning(f'止损委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
-                    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                 '止损卖单', p.order_premium, STRATEGY_NAME)
-                elif curr_price >= cost_price * p.upper_income_c and code[:2] == '30':
-                    # 止盈卖出：创业板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
-                    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                 '止盈卖单', p.order_premium, STRATEGY_NAME)
-                elif curr_price >= cost_price * p.upper_income:
-                    # 止盈卖出：主板
-                    logging.warning(f'止盈委托 {code} {sell_volume}股\t现价:{PATH_BASE + curr_price:.3f}')
-                    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, curr_price, sell_volume,
-                                 '止盈卖单', p.order_premium, STRATEGY_NAME)
+                if (code in quotes) and (code in cache_indicators):
+                    if curr_price <= cost_price * p.lower_income:
+                        # 绝对止损卖出
+                        order_sell(code, curr_price, sell_volume, 'ABS止损委托')
+                    elif curr_price >= cost_price * p.upper_income:
+                        # 绝对止盈卖出
+                        order_sell(code, curr_price, sell_volume, 'ABS止盈委托')
+                    else:
+                        quote = quotes[code]
+                        close = np.append(cache_indicators[code]['CLOSE_3D'], quote['lastPrice'])
+                        high = np.append(cache_indicators[code]['HIGH_3D'], quote['high'])
+                        low = np.append(cache_indicators[code]['LOW_3D'], quote['low'])
+
+                        sma = get_sma(close, p.sma_time_period)
+                        atr = get_atr(close, high, low, p.atr_time_period)
+
+                        atr_upper = sma + atr * p.atr_upper_multi
+                        atr_lower = sma - atr * p.atr_lower_multi
+
+                        if curr_price <= atr_lower:
+                            # ATR止损卖出
+                            logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                            f'ATR止损线:{cache_indicators[code]["ATR_LOWER"]}')
+                            order_sell(code, curr_price, sell_volume, 'ATR止损委托', log=False)
+                        elif curr_price >= atr_upper:
+                            # ATR止盈卖出
+                            logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                            f'ATR止盈线:{cache_indicators[code]["ATR_UPPER"]}')
+                            order_sell(code, curr_price, sell_volume, 'ATR止盈委托', log=False)
+                else:
+                    if curr_price <= cost_price * p.lower_income:
+                        # 默认止损卖出
+                        order_sell(code, curr_price, sell_volume, 'DEF止损委托')
+                    elif curr_price >= cost_price * p.upper_income:
+                        # 默认止盈卖出
+                        order_sell(code, curr_price, sell_volume, 'DEF止盈委托')
 
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
