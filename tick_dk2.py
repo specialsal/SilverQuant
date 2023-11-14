@@ -146,34 +146,28 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
     return 0
 
 
-def pre_download() -> None:
-    history_codes = get_all_historical_codes(target_stock_prefixes)
-    now = datetime.datetime.now()
-    start = get_prev_trading_date(now, p.day_count)
-    end = get_prev_trading_date(now, 1)
-
-    t0 = datetime.datetime.now()
-    pre_download_xtdata(
-        history_codes,
-        start_date=start,
-        end_date=end,
-    )
-    t1 = datetime.datetime.now()
-    print(f'Download TIME COST: {t1 - t0}')
-
-
 def prepare_indicators(cache_path: str) -> None:
     temp_indicators = load_pickle(cache_path)
     if temp_indicators is not None:
         cache_indicators.update(temp_indicators)
         print(f'Prepared indicators from {cache_path}')
     else:
+        history_codes = get_all_historical_codes(target_stock_prefixes)
+
         now = datetime.datetime.now()
         start = get_prev_trading_date(now, p.day_count)
         end = get_prev_trading_date(now, 1)
-        print(f'Fetching qmt history data from {start} to {end}')
 
-        history_codes = get_all_historical_codes(target_stock_prefixes)
+        print(f'Download time range: {start} - {end}')
+        t0 = datetime.datetime.now()
+        pre_download_xtdata(
+            history_codes,
+            start_date=start,
+            end_date=end,
+        )
+        t1 = datetime.datetime.now()
+        print(f'Download TIME COST: {t1 - t0}')
+
         market_dict = get_xtdata_market_dict(
             codes=history_codes,
             start_date=start,
@@ -335,14 +329,14 @@ def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
     # 盘前
     if '09:15' <= curr_time <= '09:19':
         daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-                   '_daily_once_pre_download', curr_date, pre_download)
+                   '_daily_once_held_inc', curr_date, held_increase)
+
+        daily_once(lock_daily_cronjob, cache_limits, None,
+                   '_daily_once_update_black', curr_date, refresh_blacklist)
 
     elif '09:20' <= curr_time <= '09:29':
         daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-                   '_daily_once_held_inc', curr_date, held_increase)
-
-        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-                   '_daily_once_prepare_ind', curr_date, prepare_indicators, PATH_INFO.format(curr_date))
+                   '_daily_once_prepare', curr_date, prepare_indicators, PATH_INFO.format(curr_date))
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
@@ -394,9 +388,9 @@ if __name__ == '__main__':
     )
 
     # 重启时防止没有数据在这先下载历史数据
+    temp_date = datetime.datetime.now().strftime('%Y-%m-%d')
     daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-               '_daily_once_pre_download',
-               datetime.datetime.now().strftime('%Y-%m-%d'), pre_download)
+               '_daily_once_prepare', temp_date, prepare_indicators, PATH_INFO.format(temp_date))
 
     print('启动行情订阅...')
     check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
