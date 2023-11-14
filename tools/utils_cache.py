@@ -10,6 +10,7 @@ import pandas as pd
 import akshare as ak
 
 from tools.tushare_token import get_tushare_pro
+from tools.utils_basic import symbol_to_code
 
 open_day_cache = {}
 OPEN_DAY_CACHE_PATH = '_cache/_open_day_list.csv'
@@ -249,6 +250,13 @@ def get_all_historical_symbols():
     with open(HISTORICAL_SYMBOLS, 'r') as r:
         symbols = r.read().split('\n')
     return symbols
+
+
+def get_all_historical_codes(target_stock_prefixes: set = None):
+    history_symbols = get_all_historical_symbols()
+    if target_stock_prefixes is None:
+        return [symbol_to_code(symbol) for symbol in history_symbols]
+    return [symbol_to_code(symbol) for symbol in history_symbols if symbol[:3] in target_stock_prefixes]
 
 
 def update_historical_open_days():

@@ -1,4 +1,3 @@
-import json
 import logging
 import pandas as pd
 
@@ -48,11 +47,11 @@ def logger_init(path=None) -> logging.Logger:
 
 def symbol_to_code(symbol: str) -> str:
     if symbol[:2] in ['00', '30']:
-        return symbol + '.SZ'
+        return f'{symbol}.SZ'
     elif symbol[:2] in ['60', '68']:
-        return symbol + '.SH'
+        return f'{symbol}.SH'
     else:
-        return symbol + '.BJ'
+        return f'{symbol}.BJ'
 
 
 def code_to_symbol(code: str) -> str:
