@@ -168,6 +168,8 @@ def prepare_indicators(cache_path: str) -> None:
         t0 = datetime.datetime.now()
         group_size = 300
         count = 0
+
+        time.sleep(2)
         for i in range(0, len(history_codes), group_size):
             sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
             print(f'Preparing {sub_codes}')
@@ -331,7 +333,7 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
     # 盘前
-    if '09:15' <= curr_time <= '09:29':
+    if '09:15' <= curr_time <= '09:19':
         daily_once(
             lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_held_inc',
             curr_date, held_increase)
@@ -340,6 +342,7 @@ def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
             lock_daily_cronjob, cache_limits, None, '_daily_once_refresh_blacklist',
             curr_date, refresh_blacklist)
 
+    elif '09:20' <= curr_time <= '09:29':
         daily_once(
             lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
             curr_date, prepare_indicators, PATH_INFO.format(curr_date))
