@@ -141,12 +141,22 @@ def prepare_indicators(cache_path: str) -> None:
         cache_indicators.update(temp_indicators)
         print(f'Prepared indicators from {cache_path}')
     else:
+        history_codes = get_all_historical_codes(target_stock_prefixes)
+
         now = datetime.datetime.now()
         start = get_prev_trading_date(now, p.day_count)
         end = get_prev_trading_date(now, 1)
-        print(f'Fetching qmt history data from {start} to {end}')
 
-        history_codes = get_all_historical_codes(target_stock_prefixes)
+        print(f'Download time range: {start} - {end}')
+        t0 = datetime.datetime.now()
+        pre_download_xtdata(
+            history_codes,
+            start_date=start,
+            end_date=end,
+        )
+        t1 = datetime.datetime.now()
+        print(f'Download TIME COST: {t1 - t0}')
+
         market_dict = get_xtdata_market_dict(
             codes=history_codes,
             start_date=start,
