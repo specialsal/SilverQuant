@@ -6,28 +6,32 @@ from typing import List, Dict
 from xtquant import xtdata
 
 
-def pre_download(start_date: str, end_date: str):
-    def inner_download(codes, start_time: str, end_time: str):
-        xtdata.download_history_data2(
-            codes,
-            period="1d",
-            start_time=start_time,
-            end_time=end_time,
-        )
-
-    df = pd.read_csv('_cache/_stock_list.csv')
-    t = []
-    i = 0
-    for index, row in df.iterrows():
-        t.append(row['ts_code'])
-        if i == 100:
-            inner_download(t, start_date, end_date)
-            time.sleep(0.1)
-            t = []
-            i = 0
+def pre_download_xtdata(codes: list[str], start_date: str, end_date: str, period: str = '1d'):
+    def inner_callback(data: dict):
+        """
+        Example data: {'finished': 1237, 'total': 5300, 'stockcode': '', 'message': '603173.SH'}
+        """
+        if data['finished'] == data['total']:
+            print(f'Download {data["total"]} completed!')
         else:
-            i += 1
-    inner_download(t, start_date, end_date)
+            # print(data)
+            if data['finished'] % 100 == 0:
+                print('.', end='')
+
+    time.sleep(1)
+    group_size = 500
+    for i in range(0, len(codes), group_size):
+        sub_codes = [sub_code for sub_code in codes[i:i + group_size]]
+        print(f'Downloading: {sub_codes}')
+        xtdata.download_history_data2(
+            sub_codes,
+            period=period,
+            start_time=start_date,
+            end_time=end_date,
+            callback=inner_callback,
+        )
+        time.sleep(0.2)
+    print(f'Download ALL completed!')
 
 
 def get_xtdata_market_dict(
@@ -40,15 +44,6 @@ def get_xtdata_market_dict(
     if columns is None:
         columns = ['open', 'close', 'high', 'low', 'volume']
 
-    # 下载历史数据
-    xtdata.download_history_data2(
-        codes,
-        period=period,
-        start_time=start_date,
-        end_time=end_date,
-    )
-
-    # 一次性取数据
     return xtdata.get_market_data(
         columns,
         codes,
@@ -130,10 +125,32 @@ def test_get_market():
     # print(a[ts_code_1])
 
 
+def test_pre_download():
+    from tools.utils_basic import symbol_to_code
+    from tools.utils_cache import get_all_historical_codes
+
+    history_codes = get_all_historical_codes({'000', '001', '002', '003'})
+    pre_download_xtdata(
+        history_codes,
+        start_date='20230801',
+        end_date='20230804',
+    )
+
+    dict = get_xtdata_market_dict(
+        history_codes,
+        period='1d',
+        start_date='20230801',
+        end_date='20230804',
+        columns=['close', 'high', 'low']
+    )
+    print(dict)
+
+
 if __name__ == '__main__':
     from tools.utils_basic import pd_show_all
     pd_show_all()
 
     # pre_download()
     # print(full_tick(['000001.SZ', '000002.SZ']))
-    test_get_market()
+    # test_get_market()
+    test_pre_download()

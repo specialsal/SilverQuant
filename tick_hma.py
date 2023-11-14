@@ -14,9 +14,9 @@ from xtquant import xtconstant
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 import tick_accounts
-from data_loader.reader_xtdata import get_xtdata_market_dict
-from tools.utils_basic import logging_init, symbol_to_code
-from tools.utils_cache import load_json, get_all_historical_symbols, daily_once, \
+from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
+from tools.utils_basic import logging_init
+from tools.utils_cache import load_json, get_all_historical_codes, daily_once, \
     check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
@@ -135,46 +135,46 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
     return 0
 
 
+def pre_download() -> None:
+    history_codes = get_all_historical_codes(target_stock_prefixes)
+    now = datetime.datetime.now()
+    start = get_prev_trading_date(now, p.day_count)
+    end = get_prev_trading_date(now, 1)
+
+    t0 = datetime.datetime.now()
+    pre_download_xtdata(
+        history_codes,
+        start_date=start,
+        end_date=end,
+    )
+    t1 = datetime.datetime.now()
+    print(f'Download TIME COST: {t1 - t0}')
+
+
 def prepare_indicators(cache_path: str) -> None:
     temp_indicators = load_pickle(cache_path)
     if temp_indicators is not None:
         cache_indicators.update(temp_indicators)
         print(f'Prepared indicators from {cache_path}')
     else:
-        history_symbols = get_all_historical_symbols()
-        history_codes = [
-            symbol_to_code(symbol)
-            for symbol in history_symbols
-            if symbol[:3] in target_stock_prefixes
-        ]
-
         now = datetime.datetime.now()
-
         start = get_prev_trading_date(now, p.day_count)
         end = get_prev_trading_date(now, 1)
         print(f'Fetching qmt history data from {start} to {end}')
 
-        t0 = datetime.datetime.now()
-        group_size = 500
+        history_codes = get_all_historical_codes(target_stock_prefixes)
+        market_dict = get_xtdata_market_dict(
+            codes=history_codes,
+            start_date=start,
+            end_date=end,
+            columns=p.data_cols)
+        time.sleep(0.5)
+
         count = 0
+        for code in history_codes:
+            count += calculate_indicators(market_dict, code)
 
-        time.sleep(2)
-        for i in range(0, len(history_codes), group_size):
-            sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
-            print(f'Preparing {sub_codes}')
-            market_dict = get_xtdata_market_dict(
-                codes=sub_codes,
-                start_date=start,
-                end_date=end,
-                columns=p.data_cols)
-            time.sleep(0.5)
-
-            for code in sub_codes:
-                count += calculate_indicators(market_dict, code)
-
-        t1 = datetime.datetime.now()
         save_pickle(cache_path, cache_indicators)
-        print(f'Preparing TIME COST: {t1 - t0}')
         print(f'{count} stocks prepared.')
 
 
@@ -360,14 +360,15 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
     # 盘前
     if '09:15' <= curr_time <= '09:19':
-        daily_once(
-            lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_held_inc',
-            curr_date, held_increase)
+        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
+                   '_daily_once_pre_download', curr_date, pre_download)
 
     elif '09:20' <= curr_time <= '09:29':
-        daily_once(
-            lock_daily_cronjob, cache_limits, PATH_DATE, '_daily_once_prepare_ind',
-            curr_date, prepare_indicators, PATH_INFO.format(curr_date))
+        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
+                   '_daily_once_held_inc', curr_date, held_increase)
+
+        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
+                   '_daily_once_prepare_ind', curr_date, prepare_indicators, PATH_INFO.format(curr_date))
 
     # 早盘
     elif '09:30' <= curr_time <= '11:30':
@@ -421,11 +422,10 @@ if __name__ == '__main__':
         xt_callback=MyCallback(),
     )
 
-    # 重启时防止没有数据在这先读取历史数据
-    today = datetime.datetime.now().strftime('%Y-%m-%d')
-    daily_once(
-        lock_daily_cronjob, cache_limits, None, '_daily_once_prepare_ind',
-        today, prepare_indicators, PATH_INFO.format(today))
+    # 重启时防止没有数据在这先下载历史数据
+    daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
+               '_daily_once_pre_download',
+               datetime.datetime.now().strftime('%Y-%m-%d'), pre_download)
 
     print('启动行情订阅...')
     check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
