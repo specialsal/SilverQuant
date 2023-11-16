@@ -6,22 +6,22 @@ import math
 import logging
 import datetime
 import threading
+import schedule
 from typing import List, Dict
 
 import numpy as np
 import talib as ta
-from xtquant import xtconstant
+from xtquant import xtconstant, xtdata
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 import tick_accounts
 from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
 from tools.utils_basic import logging_init
-from tools.utils_cache import load_json, get_all_historical_codes, daily_once, \
+from tools.utils_cache import load_json, get_all_historical_codes, \
     check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
-from tools.xt_subscriber import sub_whole_quote
-from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit, xt_stop_exit
+from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
 
 # ======== 配置 ========
 STRATEGY_NAME = '银狐二号'
@@ -36,10 +36,9 @@ PATH_INFO = PATH_BASE + '/info-{}.pkl'      # 用来缓存当天的指标信息
 
 lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
 lock_held_op_cache = threading.Lock()       # 操作持仓数据缓存的锁
-lock_daily_cronjob = threading.Lock()       # 标记每天一次执行的锁
 
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
-cache_select: Dict[str, set] = {}           # 记录选股历史，去重
+cache_select: Dict[str, List] = {}           # 记录选股历史，去重
 cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
 cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
     'prev_datetime': '',            # 限制每秒一次跑策略扫描的缓存
@@ -110,7 +109,10 @@ class MyCallback(XtBaseCallback):
         logging.warning(log)
 
 
-def held_increase():
+# ======== 盘前 ========
+
+
+def held_increase() -> None:
     all_held_inc(lock_held_op_cache, PATH_HELD)
     print(f'All held stock day +1!')
 
@@ -135,7 +137,12 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
     return 0
 
 
-def prepare_indicators(cache_path: str) -> None:
+def prepare_indicators() -> None:
+    now = datetime.datetime.now()
+    curr_date = now.strftime('%Y-%m-%d')
+    cache_path = PATH_INFO.format(curr_date)
+    count = p.day_count
+
     temp_indicators = load_pickle(cache_path)
     if temp_indicators is not None:
         cache_indicators.update(temp_indicators)
@@ -143,8 +150,7 @@ def prepare_indicators(cache_path: str) -> None:
     else:
         history_codes = get_all_historical_codes(target_stock_prefixes)
 
-        now = datetime.datetime.now()
-        start = get_prev_trading_date(now, p.day_count)
+        start = get_prev_trading_date(now, count)
         end = get_prev_trading_date(now, 1)
 
         print(f'Download time range: {start} - {end}')
@@ -170,6 +176,9 @@ def prepare_indicators(cache_path: str) -> None:
 
         save_pickle(cache_path, cache_indicators)
         print(f'{count} stocks prepared.')
+
+
+# ======== 买点 ========
 
 
 def get_last_hma(data: np.array, n: int) -> float:
@@ -232,8 +241,26 @@ def select_stocks(quotes: dict) -> list[dict[str, any]]:
     return selections
 
 
-def scan_buy(selections: list, curr_date: str, positions: List[XtPosition]) -> None:
-    if len(selections) > 0:  # 选出一个以上的股票
+def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
+    selections = select_stocks(quotes)
+
+    # 记录选股历史
+    if curr_date not in cache_select:
+        cache_select[curr_date] = []
+
+    for selection in selections:
+        if selection['code'] not in cache_select[curr_date]:
+            cache_select[curr_date].append(selection['code'])
+            logging.warning(
+                f"记录选股 {selection['code']}"
+                f"\t现价: {selection['price']:.2f}"
+                f"\tHMA_20: {selection['hma20']:.2f}"
+                f"\tHMA_40: {selection['hma40']:.2f}"
+                f"\tHMA_60: {selection['hma60']:.2f}"
+                f"\tSMA_20: {selection['sma20']:.2f}")
+
+    # 选出一个以上的股票
+    if len(selections) > 0:
         selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
 
         position_codes = [position.stock_code for position in positions]
@@ -245,37 +272,27 @@ def scan_buy(selections: list, curr_date: str, positions: List[XtPosition]) -> N
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
         buy_count = min(buy_count, p.upper_buy_count)               # 限制一秒内下单数量
         buy_count = int(buy_count)
+        print(f'买数相关 现有仓位{position_count} 现金{asset.cash} 本次选数{len(selections)} 仓数{p.upper_buy_count}')
 
         for i in range(buy_count):  # 依次买入
             code = selections[i]['code']
             price = selections[i]['price']
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
-            if (
-                (buy_volume > 0)
-                and (code not in position_codes)
-                and (curr_date not in cache_select or code not in cache_select[curr_date])
-            ):
+            if buy_volume <= 0:
+                print('可买数量不足一手')
+            elif code in position_codes:
+                print('目前已经正在持仓')
+            elif curr_date in cache_select and code in cache_select[curr_date]:
+                print('今日已经选过该股')
+            else:
                 # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
                 order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
                              '选股买单', p.order_premium, STRATEGY_NAME)
                 logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
 
-        # 记录选股历史
-        if curr_date not in cache_select:
-            cache_select[curr_date] = set()
 
-        for selection in selections:
-            if selection['code'] not in cache_select[curr_date]:
-                cache_select[curr_date].add(selection['code'])
-                logging.warning(
-                    f"记录选股 {selection['code']}"
-                    f"\t现价: {selection['price']:.2f}"
-                    f"\tHMA_20: {selection['hma20']:.2f}"
-                    f"\tHMA_40: {selection['hma40']:.2f}"
-                    f"\tHMA_60: {selection['hma60']:.2f}"
-                    f"\tSMA_20: {selection['sma20']:.2f}"
-                )
+# ======== 卖点 ========
 
 
 def get_sma(row_close, period) -> float:
@@ -351,31 +368,21 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
                         order_sell(code, curr_price, sell_volume, 'DEF止盈委托')
 
 
+# ======== 框架 ========
+
+
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
-    # 盘前
-    if '09:15' <= curr_time <= '09:19':
-        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-                   '_daily_once_held_inc', curr_date, held_increase)
-
-    elif '09:20' <= curr_time <= '09:29':
-        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-                   '_daily_once_prepare', curr_date, prepare_indicators, PATH_INFO.format(curr_date))
-
     # 早盘
-    elif '09:30' <= curr_time <= '11:30':
+    if '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
-
-        selections = select_stocks(quotes)
-        scan_buy(selections, curr_date, positions)
+        scan_buy(quotes, curr_date, positions)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
-
-        selections = select_stocks(quotes)
-        scan_buy(selections, curr_date, positions)
+        scan_buy(quotes, curr_date, positions)
 
 
 def callback_sub_whole(quotes: dict) -> None:
@@ -404,21 +411,36 @@ def callback_sub_whole(quotes: dict) -> None:
                 print('x', end='')
 
 
+def subscribe_tick():
+    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        print('启动行情订阅...')
+        cache_limits['sub_seq'] = xtdata.subscribe_whole_quote(["SH", "SZ"], callback=callback_sub_whole)
+
+
+def unsubscribe_tick():
+    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        print('关闭行情订阅...')
+        xtdata.unsubscribe_quote(cache_limits['sub_seq'])
+
+
 if __name__ == '__main__':
     logging_init(path=PATH_LOGS, level=logging.INFO)
-
     xt_delegate = XtDelegate(
         account_id=QMT_ACCOUNT_ID,
         client_path=QMT_CLIENT_PATH,
-        xt_callback=MyCallback(),
-    )
+        xt_callback=MyCallback())
 
     # 重启时防止没有数据在这先下载历史数据
     temp_date = datetime.datetime.now().strftime('%Y-%m-%d')
-    daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-               '_daily_once_prepare', temp_date, prepare_indicators, PATH_INFO.format(temp_date))
+    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        prepare_indicators()
 
-    print('启动行情订阅...')
-    check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
-    sub_whole_quote(callback_sub_whole)
-    xt_stop_exit()  # 死循环 阻塞主线程退出
+    # 定时任务启动
+    schedule.every().day.at('09:10').do(held_increase)
+    schedule.every().day.at('09:15').do(prepare_indicators)
+    schedule.every().day.at('09:25').do(subscribe_tick)
+    schedule.every().day.at('15:10').do(unsubscribe_tick)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
