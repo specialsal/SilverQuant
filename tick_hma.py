@@ -65,7 +65,7 @@ class p:
     # 止盈止损
     upper_income = 1.25     # 止盈率（ATR失效时使用）
     stop_income = 1.05      # 换仓阈值
-    lower_income = 0.96     # 止损率（ATR失效时使用）
+    lower_income = 0.97     # 止损率（ATR失效时使用）
     atr_time_period = 3     # 计算atr的天数
     atr_upper_multi = 1.25  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数

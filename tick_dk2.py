@@ -41,7 +41,7 @@ lock_daily_cronjob = threading.Lock()       # 标记每天一次执行的锁
 
 cache_blacklist: set[str] = set()           # 记录黑名单中的股票
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
-cache_select: Dict[str, set] = {}           # 记录选股历史，去重
+cache_select: Dict[str, List] = {}           # 记录选股历史，去重
 cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
 cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
     'prev_datetime': '',            # 限制每秒一次跑策略扫描的缓存
@@ -213,7 +213,21 @@ def select_stocks(quotes: dict) -> list[dict[str, any]]:
     return selections
 
 
-def scan_buy(selections: list, curr_date: str, positions: List[XtPosition]) -> None:
+def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
+    selections = select_stocks(quotes)
+
+    # 记录选股历史
+    if curr_date not in cache_select:
+        cache_select[curr_date] = []
+
+    for selection in selections:
+        if selection['code'] not in cache_select[curr_date]:
+            cache_select[curr_date].append(selection['code'])
+            logging.warning('记录选股 {}\t现价: {}'.format(
+                selection['code'],
+                round(selection['price'], 2),
+            ))
+
     if len(selections) > 0:  # 选出一个以上的股票
         selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
 
@@ -232,28 +246,21 @@ def scan_buy(selections: list, curr_date: str, positions: List[XtPosition]) -> N
             price = selections[i]['price']
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
-            if (
-                    (buy_volume > 0)
-                    and (code not in position_codes)
-                    and (curr_date not in cache_select or code not in cache_select[curr_date])
-            ):
+            if buy_volume <= 0:
+                print('可买数量不足一手')
+            elif code in position_codes:
+                print('目前已经正在持仓')
+            elif curr_date in cache_select and code in cache_select[curr_date]:
+                print('今日已经选过该股')
+            else:
                 # TODO 1.
                 # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
                 order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
                              '选股买单', p.order_premium, STRATEGY_NAME)
                 logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
 
-        # 记录选股历史
-        if curr_date not in cache_select:
-            cache_select[curr_date] = set()
 
-        for selection in selections:
-            if selection['code'] not in cache_select[curr_date]:
-                cache_select[curr_date].add(selection['code'])
-                logging.warning('记录选股 {}\t现价: {}'.format(
-                    selection['code'],
-                    round(selection['price'], 2),
-                ))
+# ======== 卖点 ========
 
 
 def get_sma(row_close, period) -> float:
@@ -329,26 +336,15 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
                         order_sell(code, curr_price, sell_volume, 'DEF止盈委托')
 
 
+# ======== 框架 ========
+
+
 def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
-    # 盘前
-    if '09:15' <= curr_time <= '09:19':
-        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-                   '_daily_once_held_inc', curr_date, held_increase)
-
-        daily_once(lock_daily_cronjob, cache_limits, None,
-                   '_daily_once_update_black', curr_date, refresh_blacklist)
-
-    elif '09:20' <= curr_time <= '09:29':
-        daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-                   '_daily_once_prepare', curr_date, prepare_indicators, PATH_INFO.format(curr_date))
-
     # 早盘
-    elif '09:30' <= curr_time <= '11:30':
+    if '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
-
-        selections = select_stocks(quotes)
-        scan_buy(selections, curr_date, positions)
+        scan_buy(quotes, curr_date, positions)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
