@@ -6,11 +6,12 @@ import math
 import logging
 import datetime
 import threading
+import schedule
 from typing import List, Dict
 
 import numpy as np
 import talib as ta
-from xtquant import xtconstant
+from xtquant import xtconstant, xtdata
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 import tick_accounts
@@ -21,7 +22,6 @@ from tools.utils_cache import load_json, get_all_historical_codes, daily_once, \
     check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
-from tools.xt_subscriber import sub_whole_quote
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit, xt_stop_exit
 
 # ======== 配置 ========
@@ -146,7 +146,12 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
     return 0
 
 
-def prepare_indicators(cache_path: str) -> None:
+def prepare_indicators() -> None:
+    now = datetime.datetime.now()
+    curr_date = now.strftime('%Y-%m-%d')
+    cache_path = PATH_INFO.format(curr_date)
+    count = p.day_count
+
     temp_indicators = load_pickle(cache_path)
     if temp_indicators is not None:
         cache_indicators.update(temp_indicators)
@@ -154,8 +159,7 @@ def prepare_indicators(cache_path: str) -> None:
     else:
         history_codes = get_all_historical_codes(target_stock_prefixes)
 
-        now = datetime.datetime.now()
-        start = get_prev_trading_date(now, p.day_count)
+        start = get_prev_trading_date(now, count)
         end = get_prev_trading_date(now, 1)
 
         print(f'Download time range: {start} - {end}')
@@ -168,12 +172,12 @@ def prepare_indicators(cache_path: str) -> None:
         t1 = datetime.datetime.now()
         print(f'Download TIME COST: {t1 - t0}')
 
+        time.sleep(0.5)
         market_dict = get_xtdata_market_dict(
             codes=history_codes,
             start_date=start,
             end_date=end,
             columns=p.data_cols)
-        time.sleep(0.5)
 
         count = 0
         for code in history_codes:
@@ -229,9 +233,9 @@ def scan_buy(selections: list, curr_date: str, positions: List[XtPosition]) -> N
             buy_volume = math.floor(p.amount_each / price / 100) * 100
 
             if (
-                (buy_volume > 0)
-                and (code not in position_codes)
-                and (curr_date not in cache_select or code not in cache_select[curr_date])
+                    (buy_volume > 0)
+                    and (code not in position_codes)
+                    and (curr_date not in cache_select or code not in cache_select[curr_date])
             ):
                 # TODO 1.
                 # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
@@ -378,21 +382,37 @@ def callback_sub_whole(quotes: dict) -> None:
                 print('x', end='')
 
 
+def subscribe_tick():
+    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        print('启动行情订阅...')
+        cache_limits['sub_seq'] = xtdata.subscribe_whole_quote(["SH", "SZ"], callback=callback_sub_whole)
+
+
+def unsubscribe_tick():
+    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')) and 'sub_seq' in cache_limits:
+        print('关闭行情订阅...')
+        xtdata.unsubscribe_quote(cache_limits['sub_seq'])
+
+
 if __name__ == '__main__':
     logging_init(path=PATH_LOGS, level=logging.INFO)
-
     xt_delegate = XtDelegate(
         account_id=QMT_ACCOUNT_ID,
         client_path=QMT_CLIENT_PATH,
-        xt_callback=MyCallback(),
-    )
+        xt_callback=MyCallback())
 
     # 重启时防止没有数据在这先下载历史数据
     temp_date = datetime.datetime.now().strftime('%Y-%m-%d')
-    daily_once(lock_daily_cronjob, cache_limits, PATH_DATE,
-               '_daily_once_prepare', temp_date, prepare_indicators, PATH_INFO.format(temp_date))
+    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        prepare_indicators()
 
-    print('启动行情订阅...')
-    check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d'))
-    sub_whole_quote(callback_sub_whole)
-    xt_stop_exit()  # 死循环 阻塞主线程退出
+    # 定时任务启动
+    schedule.every().day.at('09:10').do(held_increase)
+    schedule.every().day.at('09:11').do(refresh_blacklist)
+    schedule.every().day.at('09:15').do(prepare_indicators)
+    schedule.every().day.at('09:25').do(subscribe_tick)
+    schedule.every().day.at('15:10').do(unsubscribe_tick)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

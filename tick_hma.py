@@ -163,12 +163,12 @@ def prepare_indicators() -> None:
         t1 = datetime.datetime.now()
         print(f'Download TIME COST: {t1 - t0}')
 
+        time.sleep(0.5)
         market_dict = get_xtdata_market_dict(
             codes=history_codes,
             start_date=start,
             end_date=end,
             columns=p.data_cols)
-        time.sleep(0.5)
 
         count = 0
         for code in history_codes:
@@ -418,7 +418,7 @@ def subscribe_tick():
 
 
 def unsubscribe_tick():
-    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')) and 'sub_seq' in cache_limits:
         print('关闭行情订阅...')
         xtdata.unsubscribe_quote(cache_limits['sub_seq'])
 
