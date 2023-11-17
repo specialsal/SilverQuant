@@ -244,21 +244,6 @@ def select_stocks(quotes: dict) -> list[dict[str, any]]:
 def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
     selections = select_stocks(quotes)
 
-    # 记录选股历史
-    if curr_date not in cache_select:
-        cache_select[curr_date] = []
-
-    for selection in selections:
-        if selection['code'] not in cache_select[curr_date]:
-            cache_select[curr_date].append(selection['code'])
-            logging.warning(
-                f"记录选股 {selection['code']}"
-                f"\t现价: {selection['price']:.2f}"
-                f"\tHMA_20: {selection['hma20']:.2f}"
-                f"\tHMA_40: {selection['hma40']:.2f}"
-                f"\tHMA_60: {selection['hma60']:.2f}"
-                f"\tSMA_20: {selection['sma20']:.2f}")
-
     # 选出一个以上的股票
     if len(selections) > 0:
         selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
@@ -290,6 +275,21 @@ def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
                 order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
                              '选股买单', p.order_premium, STRATEGY_NAME)
                 logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
+
+    # 记录选股历史
+    if curr_date not in cache_select:
+        cache_select[curr_date] = []
+
+    for selection in selections:
+        if selection['code'] not in cache_select[curr_date]:
+            cache_select[curr_date].append(selection['code'])
+            logging.warning(
+                f"记录选股 {selection['code']}"
+                f"\t现价: {selection['price']:.2f}"
+                f"\tHMA_20: {selection['hma20']:.2f}"
+                f"\tHMA_40: {selection['hma40']:.2f}"
+                f"\tHMA_60: {selection['hma60']:.2f}"
+                f"\tSMA_20: {selection['sma20']:.2f}")
 
 
 # ======== 卖点 ========
