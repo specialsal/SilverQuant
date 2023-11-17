@@ -7,7 +7,7 @@ import logging
 import datetime
 import threading
 import schedule
-from typing import List, Dict
+from typing import List, Dict, Set
 
 import numpy as np
 import talib as ta
@@ -38,7 +38,7 @@ lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
 lock_held_op_cache = threading.Lock()       # 操作持仓数据缓存的锁
 
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
-cache_select: Dict[str, List] = {}           # 记录选股历史，去重
+cache_select: Dict[str, Set] = {}           # 记录选股历史，去重
 cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
 cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
     'prev_datetime': '',            # 限制每秒一次跑策略扫描的缓存
@@ -170,6 +170,7 @@ def prepare_indicators() -> None:
             end_date=end,
             columns=p.data_cols)
 
+        cache_indicators.clear()
         count = 0
         for code in history_codes:
             count += calculate_indicators(market_dict, code)
@@ -259,18 +260,18 @@ def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
         buy_count = int(buy_count)
 
         for i in range(len(selections)):  # 依次买入
-            print(f'买数相关 现有仓位{position_count} 现金{asset.cash} 本次选数{len(selections)} 仓数{p.upper_buy_count}')
+            logging.debug(f'买数相关：持仓{position_count} 现金{asset.cash} 已选{len(selections)}')
             if buy_count > 0:
                 code = selections[i]['code']
                 price = selections[i]['price']
                 buy_volume = math.floor(p.amount_each / price / 100) * 100
 
                 if buy_volume <= 0:
-                    print(f'{code} 可买数量不足一手')
+                    logging.debug(f'{code} 价格过高')
                 elif code in position_codes:
-                    print(f'{code} 目前已经正在持仓')
+                    logging.debug(f'{code} 正在持仓')
                 elif curr_date in cache_select and code in cache_select[curr_date]:
-                    print(f'{code} 今日已经选过该股')
+                    logging.debug(f'{code} 今日已选')
                 else:
                     buy_count = buy_count - 1
                     # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
@@ -282,11 +283,11 @@ def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
 
     # 记录选股历史
     if curr_date not in cache_select:
-        cache_select[curr_date] = []
+        cache_select[curr_date] = set()
 
     for selection in selections:
         if selection['code'] not in cache_select[curr_date]:
-            cache_select[curr_date].append(selection['code'])
+            cache_select[curr_date].add(selection['code'])
             logging.warning(
                 f"记录选股 {selection['code']}"
                 f"\t现价: {selection['price']:.2f}"
@@ -434,10 +435,14 @@ if __name__ == '__main__':
         client_path=QMT_CLIENT_PATH,
         xt_callback=MyCallback())
 
-    # 重启时防止没有数据在这先下载历史数据
     temp_date = datetime.datetime.now().strftime('%Y-%m-%d')
-    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+    temp_time = datetime.datetime.now().strftime('%H:%M')
+    # 重启时防止没有数据在这先加载历史数据
+    if check_today_is_open_day(temp_date):
         prepare_indicators()
+        # 重启如果在交易时间则订阅Tick
+        if '09:30' <= temp_time <= '14:57':
+            subscribe_tick()
 
     # 定时任务启动
     schedule.every().day.at('09:10').do(held_increase)
