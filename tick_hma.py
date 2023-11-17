@@ -198,7 +198,7 @@ def get_last_sma(data: np.array, n: int) -> float:
     return sma[-1:][0]
 
 
-def decide_stock(quote: dict, indicator: dict) -> (bool, dict):
+def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     curr_close = quote['lastPrice']
     curr_open = quote['open']
     last_close = quote['lastClose']
@@ -225,7 +225,7 @@ def decide_stock(quote: dict, indicator: dict) -> (bool, dict):
     return True, {'hma20': hma20, 'hma40': hma40, 'hma60': hma60, 'sma20': sma20}
 
 
-def select_stocks(quotes: dict) -> list[dict[str, any]]:
+def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
     selections = []
     for code in quotes:
         if code[:3] not in target_stock_prefixes:
@@ -242,7 +242,7 @@ def select_stocks(quotes: dict) -> list[dict[str, any]]:
     return selections
 
 
-def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
+def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
     selections = select_stocks(quotes)
 
     # 选出一个以上的股票
@@ -316,7 +316,7 @@ def order_sell(code, price, volume, remark, log=True):
     order_submit(xt_delegate, xtconstant.STOCK_SELL, code, price, volume, remark, p.order_premium, STRATEGY_NAME)
 
 
-def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None:
+def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None:
     held_days = load_json(PATH_HELD)
 
     for position in positions:
@@ -376,7 +376,7 @@ def scan_sell(quotes: dict, curr_time: str, positions: List[XtPosition]) -> None
 # ======== 框架 ========
 
 
-def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
+def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
     # 早盘
     if '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
@@ -390,7 +390,7 @@ def execute_strategy(curr_date: str, curr_time: str, quotes: dict):
         scan_buy(quotes, curr_date, positions)
 
 
-def callback_sub_whole(quotes: dict) -> None:
+def callback_sub_whole(quotes: Dict) -> None:
     now = datetime.datetime.now()
 
     # 每分钟输出一行开头
