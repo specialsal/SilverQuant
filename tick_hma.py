@@ -257,24 +257,28 @@ def scan_buy(quotes: dict, curr_date: str, positions: List[XtPosition]) -> None:
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
         buy_count = min(buy_count, p.upper_buy_count)               # 限制一秒内下单数量
         buy_count = int(buy_count)
-        print(f'买数相关 现有仓位{position_count} 现金{asset.cash} 本次选数{len(selections)} 仓数{p.upper_buy_count}')
 
-        for i in range(buy_count):  # 依次买入
-            code = selections[i]['code']
-            price = selections[i]['price']
-            buy_volume = math.floor(p.amount_each / price / 100) * 100
+        for i in range(len(selections)):  # 依次买入
+            print(f'买数相关 现有仓位{position_count} 现金{asset.cash} 本次选数{len(selections)} 仓数{p.upper_buy_count}')
+            if buy_count > 0:
+                code = selections[i]['code']
+                price = selections[i]['price']
+                buy_volume = math.floor(p.amount_each / price / 100) * 100
 
-            if buy_volume <= 0:
-                print('可买数量不足一手')
-            elif code in position_codes:
-                print('目前已经正在持仓')
-            elif curr_date in cache_select and code in cache_select[curr_date]:
-                print('今日已经选过该股')
+                if buy_volume <= 0:
+                    print(f'{code} 可买数量不足一手')
+                elif code in position_codes:
+                    print(f'{code} 目前已经正在持仓')
+                elif curr_date in cache_select and code in cache_select[curr_date]:
+                    print(f'{code} 今日已经选过该股')
+                else:
+                    buy_count = buy_count - 1
+                    # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
+                    order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
+                                 '选股买单', p.order_premium, STRATEGY_NAME)
+                    logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
             else:
-                # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
-                order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
-                             '选股买单', p.order_premium, STRATEGY_NAME)
-                logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
+                break
 
     # 记录选股历史
     if curr_date not in cache_select:
