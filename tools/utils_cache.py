@@ -141,7 +141,7 @@ def check_today_is_open_day(curr_date: str) -> bool:
         df = pd.read_csv(OPEN_DAY_CACHE_PATH)
         if int(today) <= df['cal_date'].max():  # 文件缓存未过期
             open_day_cache[today] = check_today_is_open_day_by_df(df, today)
-            print(f'[{today} is {open_day_cache[today]} open day in memory]', end='')
+            print(f'[{today} is {open_day_cache[today]} open day in memory]')
             return open_day_cache[today]
 
     # 网络缓存

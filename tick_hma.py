@@ -113,6 +113,9 @@ class MyCallback(XtBaseCallback):
 
 
 def held_increase() -> None:
+    if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        return
+
     all_held_inc(lock_held_op_cache, PATH_HELD)
     print(f'All held stock day +1!')
 
@@ -138,6 +141,9 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
 
 
 def prepare_indicators() -> None:
+    if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        return
+
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y-%m-%d')
     cache_path = PATH_INFO.format(curr_date)
@@ -417,13 +423,18 @@ def callback_sub_whole(quotes: Dict) -> None:
 
 
 def subscribe_tick():
-    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
-        print('启动行情订阅...')
-        cache_limits['sub_seq'] = xtdata.subscribe_whole_quote(["SH", "SZ"], callback=callback_sub_whole)
+    if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        return
+
+    print('启动行情订阅...')
+    cache_limits['sub_seq'] = xtdata.subscribe_whole_quote(["SH", "SZ"], callback=callback_sub_whole)
 
 
 def unsubscribe_tick():
-    if check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')) and 'sub_seq' in cache_limits:
+    if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        return
+
+    if 'sub_seq' in cache_limits:
         print('关闭行情订阅...')
         xtdata.unsubscribe_quote(cache_limits['sub_seq'])
 
