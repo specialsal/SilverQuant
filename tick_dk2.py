@@ -7,6 +7,7 @@ import logging
 import datetime
 import threading
 import schedule
+from random import random
 from typing import List, Dict, Set
 
 import numpy as np
@@ -39,12 +40,12 @@ lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
 lock_held_op_cache = threading.Lock()       # 操作持仓数据缓存的锁
 lock_daily_cronjob = threading.Lock()       # 标记每天一次执行的锁
 
-cache_blacklist: set[str] = set()           # 记录黑名单中的股票
+cache_blacklist: Set[str] = set()           # 记录黑名单中的股票
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
 cache_select: Dict[str, Set] = {}           # 记录选股历史，去重
 cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
 cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
-    'prev_datetime': '',            # 限制每秒一次跑策略扫描的缓存
+    'prev_seconds': '',             # 限制每秒一次跑策略扫描的缓存
     'prev_minutes': '',             # 限制每分钟屏幕心跳换行的缓存
 }
 
@@ -216,7 +217,7 @@ def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
 
         passed = decide_stock(quotes[code], cache_indicators[code])
         if passed and code not in cache_blacklist:   # 如果不在黑名单
-            selections.append({'code': code, 'price': quotes[code]["lastPrice"]})
+            selections.append({'code': code, 'price': quotes[code]['lastPrice']})
     return selections
 
 
@@ -373,10 +374,10 @@ def callback_sub_whole(quotes: Dict) -> None:
 
     # 每秒钟开始的时候输出一个点
     with lock_quotes_update:
-        curr_datetime = now.strftime("%Y-%m-%d %H:%M:%S")
+        curr_seconds = now.strftime('%H:%M:%S')
         cache_quotes.update(quotes)
-        if cache_limits['prev_datetime'] != curr_datetime:
-            cache_limits['prev_datetime'] = curr_datetime
+        if cache_limits['prev_seconds'] != curr_seconds:
+            cache_limits['prev_seconds'] = curr_seconds
             curr_date = now.strftime('%Y-%m-%d')
 
             # 只有在交易日才执行策略
@@ -405,6 +406,14 @@ def unsubscribe_tick():
         xtdata.unsubscribe_quote(cache_limits['sub_seq'])
 
 
+def random_check_open_day():
+    now = datetime.datetime.now()
+    curr_date = now.strftime('%Y-%m-%d')
+    curr_time = now.strftime('%H:%M')
+    print(f'[{curr_time}]')
+    check_today_is_open_day(curr_date)
+
+
 if __name__ == '__main__':
     logging_init(path=PATH_LOGS, level=logging.INFO)
     xt_delegate = XtDelegate(
@@ -412,8 +421,9 @@ if __name__ == '__main__':
         client_path=QMT_CLIENT_PATH,
         xt_callback=MyCallback())
 
-    temp_date = datetime.datetime.now().strftime('%Y-%m-%d')
-    temp_time = datetime.datetime.now().strftime('%H:%M')
+    now = datetime.datetime.now()
+    temp_date = now.strftime('%Y-%m-%d')
+    temp_time = now.strftime('%H:%M')
     # 重启时防止没有数据在这先加载历史数据
     if check_today_is_open_day(temp_date):
         prepare_indicators()
@@ -422,6 +432,8 @@ if __name__ == '__main__':
             subscribe_tick()
 
     # 定时任务启动
+    random_time = f'08:{str(math.floor(random() * 60)).zfill(2)}'
+    schedule.every().day.at(random_time).do(random_check_open_day)
     schedule.every().day.at('09:10').do(held_increase)
     schedule.every().day.at('09:11').do(refresh_blacklist)
     schedule.every().day.at('09:15').do(prepare_indicators)
