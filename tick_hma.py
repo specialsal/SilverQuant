@@ -444,7 +444,7 @@ def random_check_open_day():
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y-%m-%d')
     curr_time = now.strftime('%H:%M')
-    print(f'[{curr_time}]')
+    print(f'[{curr_time}]', end='')
     check_today_is_open_day(curr_date)
 
 
