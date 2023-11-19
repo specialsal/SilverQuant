@@ -141,7 +141,7 @@ def check_today_is_open_day(curr_date: str) -> bool:
         df = pd.read_csv(OPEN_DAY_CACHE_PATH)
         if int(today) <= df['cal_date'].max():  # 文件缓存未过期
             open_day_cache[today] = check_today_is_open_day_by_df(df, today)
-            print(f'[{today} is {open_day_cache[today]} open day in memory]')
+            print(f'[{curr_date} is {open_day_cache[today]} open day in memory]')
             return open_day_cache[today]
 
     # 网络缓存
@@ -154,11 +154,11 @@ def check_today_is_open_day(curr_date: str) -> bool:
         end_date=next_year_date,
     )
     df.to_csv(OPEN_DAY_CACHE_PATH)
-    print(f'Cache open day list in {OPEN_DAY_CACHE_PATH}.')
+    print(f'Cache open day list {curr_date} - {next_year_date} in {OPEN_DAY_CACHE_PATH}.')
 
     df = pd.read_csv(OPEN_DAY_CACHE_PATH)
     open_day_cache[today] = check_today_is_open_day_by_df(df, today)
-    print(f'{today} is {open_day_cache[today]} open day in memory.')
+    print(f'[{curr_date} is {open_day_cache[today]} open day in memory]')
 
     return open_day_cache[today]
 
@@ -315,5 +315,5 @@ if __name__ == '__main__':
 
     # print(get_historical_open_days(end_date='20000101'))
     # test_cache_held()
-    # test_check_today_is_open_day()
-    test_cache_pickle()
+    test_check_today_is_open_day()
+    # test_cache_pickle()
