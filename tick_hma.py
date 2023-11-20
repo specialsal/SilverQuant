@@ -495,11 +495,12 @@ if __name__ == '__main__':
         client_path=QMT_CLIENT_PATH,
         xt_callback=MyCallback())
 
+    # 重启时防止没有数据在这先加载历史数据
     now = datetime.datetime.now()
     temp_date = now.strftime('%Y-%m-%d')
     temp_time = now.strftime('%H:%M')
-    # 重启时防止没有数据在这先加载历史数据
-    if check_today_is_open_day(temp_date):
+
+    if '09:30' <= temp_time and check_today_is_open_day(temp_date):
         prepare_indicators()
         # 重启如果在交易时间则订阅Tick
         if '09:30' <= temp_time <= '14:57':
