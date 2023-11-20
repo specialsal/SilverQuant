@@ -17,6 +17,7 @@ from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 import tick_accounts
 from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
+from data_loader.reader_tushare import get_ts_market, get_ts_markets
 from tools.utils_basic import logging_init
 from tools.utils_cache import load_json, get_all_historical_codes, \
     check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
@@ -121,10 +122,10 @@ def held_increase() -> None:
     print(f'All held stock day +1!')
 
 
-def calculate_indicators(market_dict: Dict, code: str) -> int:
-    row_close = market_dict['close'].loc[code]
-    row_high = market_dict['high'].loc[code]
-    row_low = market_dict['low'].loc[code]
+def calculate_indicators(data: Dict, code: str) -> int:
+    row_close = data['close']
+    row_high = data['high']
+    row_low = data['low']
 
     if not row_close.isna().any() and len(row_close) == p.day_count:
         close_3d = row_close.tail(p.atr_time_period).values
@@ -141,46 +142,85 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
     return 0
 
 
-def prepare_indicators() -> None:
+def prepare_by_xtdata(history_codes: List[str], start: str, end: str):
+    print(f'Download time range: {start} - {end}')
+    t0 = datetime.datetime.now()
+    pre_download_xtdata(
+        history_codes,
+        start_date=start,
+        end_date=end,
+    )
+    t1 = datetime.datetime.now()
+    print(f'Download TIME COST: {t1 - t0}')
+
+    time.sleep(0.5)
+    market_dict = get_xtdata_market_dict(
+        codes=history_codes,
+        start_date=start,
+        end_date=end,
+        columns=p.data_cols)
+
+    cache_indicators.clear()
+    count = 0
+    for code in history_codes:
+        temp_data = {}
+        for col in p.data_cols:
+            temp_data[col] = market_dict[col].loc[code]
+        count += calculate_indicators(temp_data, code)
+    return count
+
+
+def prepare_by_tushare(history_codes: list, start: str, end: str) -> int:
+    print(f'Prepared time range: {start} - {end}')
+    t0 = datetime.datetime.now()
+
+    cache_indicators.clear()
+    count = 0
+
+    # for code in history_codes:
+    #     print(code)
+    #     temp_data = get_ts_market(code, start, end, p.data_cols)
+    #     if temp_data is not None:
+    #         count += calculate_indicators(temp_data, code)
+
+    group_size = 6000 // p.day_count
+    for i in range(0, len(history_codes), group_size):
+        sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
+        temp_data = get_ts_markets(sub_codes, start, end, p.data_cols)
+        print(sub_codes)
+
+        for code in sub_codes:
+            temp_df = temp_data[temp_data['ts_code'] == code]
+            count += calculate_indicators(temp_df, code)
+
+    t1 = datetime.datetime.now()
+    print(f'Prepared TIME COST: {t1 - t0}')
+    return count
+
+
+def prepare_indicators(use_xtdata: bool = False) -> None:
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
 
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y-%m-%d')
     cache_path = PATH_INFO.format(curr_date)
-    count = p.day_count
+    day_count = p.day_count
 
     temp_indicators = load_pickle(cache_path)
-    if temp_indicators is not None:
+    if temp_indicators is not None and len(temp_indicators) > 0:
         cache_indicators.update(temp_indicators)
         print(f'Prepared indicators from {cache_path}')
     else:
         history_codes = get_all_historical_codes(target_stock_prefixes)
 
-        start = get_prev_trading_date(now, count)
+        start = get_prev_trading_date(now, day_count)
         end = get_prev_trading_date(now, 1)
 
-        print(f'Download time range: {start} - {end}')
-        t0 = datetime.datetime.now()
-        pre_download_xtdata(
-            history_codes,
-            start_date=start,
-            end_date=end,
-        )
-        t1 = datetime.datetime.now()
-        print(f'Download TIME COST: {t1 - t0}')
-
-        time.sleep(0.5)
-        market_dict = get_xtdata_market_dict(
-            codes=history_codes,
-            start_date=start,
-            end_date=end,
-            columns=p.data_cols)
-
-        cache_indicators.clear()
-        count = 0
-        for code in history_codes:
-            count += calculate_indicators(market_dict, code)
+        if use_xtdata:
+            count = prepare_by_xtdata(history_codes, start, end)
+        else:
+            count = prepare_by_tushare(history_codes, start, end)
 
         save_pickle(cache_path, cache_indicators)
         print(f'{count} stocks prepared.')

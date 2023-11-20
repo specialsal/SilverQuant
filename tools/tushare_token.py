@@ -5,7 +5,7 @@ my_token = [
 ]
 
 
-def get_tushare_pro(account_number=None):
+def get_tushare_pro(account_number=0):
     import tushare as ts
     ts.set_token(my_token[account_number])
     return ts.pro_api()

@@ -11,10 +11,11 @@ def check_today_is_open_day(curr_date: str) -> bool:
 
 
 def get_prev_trading_date(now: datetime.datetime, count: int) -> str:
-    assert count > 0
+    assert count >= 0, 'count 不能 < 0'
     curr_date = now.strftime("%Y%m%d")
-    prev_date = (now - datetime.timedelta(days=count * 2 + 10)).strftime("%Y%m%d")
+    prev_date = (now - datetime.timedelta(days=count * 2 + 10)).strftime("%Y%m%d")  # 设置大一些省的不够用
 
+    count = count + 1  # 获取前count天的日期，为了不包含今天所以+1
     time_tags = xtdata.get_trading_dates('SZ', prev_date, curr_date, count)
     assert len(time_tags) == count, 'count 设置过大'
 
@@ -33,9 +34,9 @@ def test_check_today_is_open_day():
 
 
 def test_get_prev_trading_date():
-    print(get_prev_trading_date(datetime.datetime.now(), 5))
+    print(get_prev_trading_date(datetime.datetime.now(), 0))
 
 
 if __name__ == '__main__':
-    test_check_today_is_open_day()
-    # test_get_prev_trading_date()
+    # test_check_today_is_open_day()
+    test_get_prev_trading_date()
