@@ -69,7 +69,7 @@ class p:
     stop_income = 1.05      # 换仓阈值
     lower_income = 0.97     # 止损率（ATR失效时使用）
     atr_time_period = 3     # 计算atr的天数
-    atr_upper_multi = 1.25  # 止盈atr的乘数
+    atr_upper_multi = 1.30  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数
     # 策略参数
@@ -78,7 +78,7 @@ class p:
     N = 60                  # 选股HMA长周期
     S = 20                  # 选股SMA周期
     open_inc = 1.00         # 相对于开盘价涨幅阈值
-    inc_limit = 0.05        # 相对于昨日收盘的涨幅限制
+    inc_limit = 0.03        # 相对于昨日收盘的涨幅限制
     # 历史指标
     day_count = 69          # 70个足够算出周期为60的 HMA
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
@@ -249,6 +249,9 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     curr_close = quote['lastPrice']
     curr_open = quote['open']
     last_close = quote['lastClose']
+
+    if not curr_close < last_close * p.inc_limit:
+        return False, {}
 
     if not curr_close > curr_open * p.open_inc:
         return False, {}
