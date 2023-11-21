@@ -17,7 +17,7 @@ from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 import tick_accounts
 from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
-from data_loader.reader_tushare import get_ts_market, get_ts_markets
+from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init
 from tools.utils_cache import load_json, get_all_historical_codes, \
     check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
@@ -459,11 +459,11 @@ def callback_sub_whole(quotes: Dict) -> None:
 
             # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
-                print('.', end='')
+                print('.' if len(cache_quotes) > 0 else 'x', end='')
                 execute_strategy(curr_date, curr_time, cache_quotes)
                 cache_quotes.clear()
             else:
-                print('x', end='')
+                print('-', end='')
 
 
 def subscribe_tick():
@@ -499,11 +499,11 @@ if __name__ == '__main__':
         xt_callback=MyCallback())
 
     # 重启时防止没有数据在这先加载历史数据
-    now = datetime.datetime.now()
-    temp_date = now.strftime('%Y-%m-%d')
-    temp_time = now.strftime('%H:%M')
+    temp_now = datetime.datetime.now()
+    temp_date = temp_now.strftime('%Y-%m-%d')
+    temp_time = temp_now.strftime('%H:%M')
 
-    if '09:30' <= temp_time and check_today_is_open_day(temp_date):
+    if '09:15' < temp_time and check_today_is_open_day(temp_date):
         prepare_indicators()
         # 重启如果在交易时间则订阅Tick
         if '09:30' <= temp_time <= '14:57':
@@ -515,7 +515,7 @@ if __name__ == '__main__':
     schedule.every().day.at('09:10').do(held_increase)
     schedule.every().day.at('09:15').do(prepare_indicators)
     schedule.every().day.at('09:25').do(subscribe_tick)
-    schedule.every().day.at('15:10').do(unsubscribe_tick)
+    schedule.every().day.at('15:00').do(unsubscribe_tick)
 
     while True:
         schedule.run_pending()

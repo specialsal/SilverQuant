@@ -18,12 +18,13 @@ from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 import tick_accounts
 from data_loader.ak_sample import get_new_stock_list_date
 from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
+from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init
-from tools.utils_cache import load_json, get_all_historical_codes, daily_once, \
+from tools.utils_cache import load_json, get_all_historical_codes, \
     check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
-from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit, xt_stop_exit
+from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
 
 # ======== 配置 ========
 STRATEGY_NAME = '布丁二号'
@@ -130,10 +131,10 @@ def held_increase():
     print(f'All held stock day +1!')
 
 
-def calculate_indicators(market_dict: Dict, code: str) -> int:
-    row_close = market_dict['close'].loc[code]
-    row_high = market_dict['high'].loc[code]
-    row_low = market_dict['low'].loc[code]
+def calculate_indicators(data: Dict, code: str) -> int:
+    row_close = data['close']
+    row_high = data['high']
+    row_low = data['low']
 
     if not row_close.isna().any() and len(row_close) == p.day_count:
         close_3d = row_close.tail(p.atr_time_period).values
@@ -150,46 +151,85 @@ def calculate_indicators(market_dict: Dict, code: str) -> int:
     return 0
 
 
-def prepare_indicators() -> None:
+def prepare_by_xtdata(history_codes: List[str], start: str, end: str):
+    print(f'Download time range: {start} - {end}')
+    t0 = datetime.datetime.now()
+    pre_download_xtdata(
+        history_codes,
+        start_date=start,
+        end_date=end,
+    )
+    t1 = datetime.datetime.now()
+    print(f'Download TIME COST: {t1 - t0}')
+
+    time.sleep(0.5)
+    market_dict = get_xtdata_market_dict(
+        codes=history_codes,
+        start_date=start,
+        end_date=end,
+        columns=p.data_cols)
+
+    cache_indicators.clear()
+    count = 0
+    for code in history_codes:
+        temp_data = {}
+        for col in p.data_cols:
+            temp_data[col] = market_dict[col].loc[code]
+        count += calculate_indicators(temp_data, code)
+    return count
+
+
+def prepare_by_tushare(history_codes: list, start: str, end: str) -> int:
+    print(f'Prepared time range: {start} - {end}')
+    t0 = datetime.datetime.now()
+
+    cache_indicators.clear()
+    count = 0
+
+    # for code in history_codes:
+    #     print(code)
+    #     temp_data = get_ts_market(code, start, end, p.data_cols)
+    #     if temp_data is not None:
+    #         count += calculate_indicators(temp_data, code)
+
+    group_size = 6000 // p.day_count
+    for i in range(0, len(history_codes), group_size):
+        sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
+        temp_data = get_ts_markets(sub_codes, start, end, p.data_cols)
+        print(sub_codes)
+
+        for code in sub_codes:
+            temp_df = temp_data[temp_data['ts_code'] == code]
+            count += calculate_indicators(temp_df, code)
+
+    t1 = datetime.datetime.now()
+    print(f'Prepared TIME COST: {t1 - t0}')
+    return count
+
+
+def prepare_indicators(use_xtdata: bool = False) -> None:
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
 
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y-%m-%d')
     cache_path = PATH_INFO.format(curr_date)
-    count = p.day_count
+    day_count = p.day_count
 
     temp_indicators = load_pickle(cache_path)
-    if temp_indicators is not None:
+    if temp_indicators is not None and len(temp_indicators) > 0:
         cache_indicators.update(temp_indicators)
         print(f'Prepared indicators from {cache_path}')
     else:
         history_codes = get_all_historical_codes(target_stock_prefixes)
 
-        start = get_prev_trading_date(now, count)
+        start = get_prev_trading_date(now, day_count)
         end = get_prev_trading_date(now, 1)
 
-        print(f'Download time range: {start} - {end}')
-        t0 = datetime.datetime.now()
-        pre_download_xtdata(
-            history_codes,
-            start_date=start,
-            end_date=end,
-        )
-        t1 = datetime.datetime.now()
-        print(f'Download TIME COST: {t1 - t0}')
-
-        time.sleep(0.5)
-        market_dict = get_xtdata_market_dict(
-            codes=history_codes,
-            start_date=start,
-            end_date=end,
-            columns=p.data_cols)
-
-        cache_indicators.clear()
-        count = 0
-        for code in history_codes:
-            count += calculate_indicators(market_dict, code)
+        if use_xtdata:
+            count = prepare_by_xtdata(history_codes, start, end)
+        else:
+            count = prepare_by_tushare(history_codes, start, end)
 
         save_pickle(cache_path, cache_indicators)
         print(f'{count} stocks prepared.')
@@ -382,11 +422,11 @@ def callback_sub_whole(quotes: Dict) -> None:
 
             # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
-                print('.', end='')
+                print('.' if len(cache_quotes) > 0 else 'x', end='')
                 execute_strategy(curr_date, curr_time, cache_quotes)
                 cache_quotes.clear()
             else:
-                print('x', end='')
+                print('-', end='')
 
 
 def subscribe_tick():
@@ -421,11 +461,12 @@ if __name__ == '__main__':
         client_path=QMT_CLIENT_PATH,
         xt_callback=MyCallback())
 
-    now = datetime.datetime.now()
-    temp_date = now.strftime('%Y-%m-%d')
-    temp_time = now.strftime('%H:%M')
     # 重启时防止没有数据在这先加载历史数据
-    if check_today_is_open_day(temp_date):
+    temp_now = datetime.datetime.now()
+    temp_date = temp_now.strftime('%Y-%m-%d')
+    temp_time = temp_now.strftime('%H:%M')
+
+    if '09:15' < temp_time and check_today_is_open_day(temp_date):
         prepare_indicators()
         # 重启如果在交易时间则订阅Tick
         if '09:30' <= temp_time <= '14:57':
@@ -438,7 +479,7 @@ if __name__ == '__main__':
     schedule.every().day.at('09:11').do(refresh_blacklist)
     schedule.every().day.at('09:15').do(prepare_indicators)
     schedule.every().day.at('09:25').do(subscribe_tick)
-    schedule.every().day.at('15:10').do(unsubscribe_tick)
+    schedule.every().day.at('15:00').do(unsubscribe_tick)
 
     while True:
         schedule.run_pending()
