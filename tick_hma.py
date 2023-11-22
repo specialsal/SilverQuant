@@ -428,7 +428,7 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
     # 早盘
-    if '09:30' <= curr_time <= '11:30':
+    if '09:31' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
         if '09:32' <= curr_time:
