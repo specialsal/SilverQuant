@@ -58,15 +58,15 @@ class DingDingWebHook(object):
         # print(self.webhook_url)
         # print(send_data)
         response = requests.post(url=self.webhook_url, data=send_data, headers=header)
-        print(response.text)
+        return json.loads(response.text)
 
 
-def sample_send_msg(message: str, auth_number: int = 0):
-    dingding = DingDingWebHook(
+def sample_send_msg(message: str, auth_number: int = 0, print_text: str = '') -> None:
+    ding = DingDingWebHook(
         secret=auth_list[auth_number]["secret"],
         url=auth_list[auth_number]["url"]
     )
-    dingding.send_message({
+    res = ding.send_message({
         "msgtype": "text",
         "text": {
             "content": message
@@ -75,6 +75,8 @@ def sample_send_msg(message: str, auth_number: int = 0):
             "isAtAll": False
         }
     })
+    if res['errmsg'] == 'ok':
+        print(print_text, end='')
 
 
 def notify_report(report: str, cache_path: Optional[str], channel: int) -> None:

@@ -93,13 +93,13 @@ class MyCallback(XtBaseCallback):
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} {trade.traded_volume}股\t均价:{trade.traded_price:.3f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0)
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'B')
             new_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} {trade.traded_volume}股\t均价:{trade.traded_price:.3f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0)
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'S')
             del_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
@@ -371,12 +371,12 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
                         if curr_price <= atr_lower:
                             # ATR止损卖出
                             logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'ATR止损线:{cache_indicators[code]["ATR_LOWER"]}')
+                                            f'ATR止损线:{atr_lower}')
                             order_sell(code, curr_price, sell_volume, 'ATR止损委托', log=False)
                         elif curr_price >= atr_upper:
                             # ATR止盈卖出
                             logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'ATR止盈线:{cache_indicators[code]["ATR_UPPER"]}')
+                                            f'ATR止盈线:{atr_upper}')
                             order_sell(code, curr_price, sell_volume, 'ATR止盈委托', log=False)
                 else:
                     if curr_price <= cost_price * p.lower_income:

@@ -16,11 +16,15 @@ def get_ts_market(code: str, start_date: str, end_date: str, columns: list[str])
 
 def get_ts_markets(codes: List[str], start_date: str, end_date: str, columns: list[str]):
     pro = get_tushare_pro()
-    df = pro.daily(
-        ts_code=','.join(codes),
-        start_date=start_date,
-        end_date=end_date,
-    )
+    try_times = 0
+    df = None
+    while (df is None or len(df) <= 0) and try_times < 3:
+        df = pro.daily(
+            ts_code=','.join(codes),
+            start_date=start_date,
+            end_date=end_date,
+        )
+
     return df[::-1][['ts_code'] + columns]
 
 
