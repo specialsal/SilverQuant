@@ -78,7 +78,7 @@ class p:
     N = 60                  # 选股HMA长周期
     S = 20                  # 选股SMA周期
     open_inc = 1.00         # 相对于开盘价涨幅阈值
-    inc_limit = 1.03        # 相对于昨日收盘的涨幅限制
+    inc_limit = 1.02        # 相对于昨日收盘的涨幅限制
     # 历史指标
     day_count = 69          # 70个足够算出周期为60的 HMA
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
@@ -431,13 +431,13 @@ def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
     if '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
-        scan_buy(quotes, curr_date, positions)
+        if '09:32' <= curr_time:
+            scan_buy(quotes, curr_date, positions)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
-        scan_buy(quotes, curr_date, positions)
 
 
 def callback_sub_whole(quotes: Dict) -> None:
