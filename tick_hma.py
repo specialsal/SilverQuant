@@ -59,17 +59,17 @@ target_stock_prefixes = {  # set
 class p:
     # 下单持仓
     switch_begin = '09:45'  # 每天最早换仓时间
-    hold_days = 3           # 持仓天数
+    hold_days = 1           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
-    order_premium = 0.05    # 保证成功下单成交的溢价
+    order_premium = 0.005   # 保证成功下单成交的溢价最大滑点
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
     upper_income = 1.25     # 止盈率（ATR失效时使用）
     stop_income = 1.05      # 换仓阈值
     lower_income = 0.97     # 止损率（ATR失效时使用）
     atr_time_period = 3     # 计算atr的天数
-    atr_upper_multi = 1.30  # 止盈atr的乘数
+    atr_upper_multi = 1.25  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数
     # 策略参数
@@ -326,7 +326,7 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
                     buy_count = buy_count - 1
                     # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
                     order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
-                                 '选股买单', p.order_premium, STRATEGY_NAME)
+                                 '选股买单', 1 + p.order_premium, STRATEGY_NAME)
                     logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
             else:
                 break
@@ -363,7 +363,7 @@ def get_atr(row_close, row_high, row_low, period) -> float:
 def order_sell(code, price, volume, remark, log=True):
     if log:
         logging.warning(f'{remark} {code} {volume}股\t现价:{price:.3f}')
-    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, price, volume, remark, p.order_premium, STRATEGY_NAME)
+    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, price, volume, remark, 1 - p.order_premium, STRATEGY_NAME)
 
 
 def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None:
@@ -487,6 +487,7 @@ def random_check_open_day():
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y-%m-%d')
     curr_time = now.strftime('%H:%M')
+    logging.warning(f'================')
     print(f'[{curr_time}]', end='')
     check_today_is_open_day(curr_date)
 
