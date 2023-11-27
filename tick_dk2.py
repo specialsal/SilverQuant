@@ -65,7 +65,7 @@ class p:
     hold_days = 0           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
-    order_premium = 0.05    # 保证成功下单成交的溢价
+    order_premium = 0.005   # 保证成功下单成交的溢价
     upper_buy_count = 5     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
     upper_income = 1.168    # 止盈率（ATR失效时使用）
@@ -294,7 +294,7 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
                     buy_count = buy_count - 1
                     # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
                     order_submit(xt_delegate, xtconstant.STOCK_BUY, code, price, buy_volume,
-                                 '选股买单', p.order_premium, STRATEGY_NAME)
+                                 '选股买单', 1 + p.order_premium, STRATEGY_NAME)
                     logging.warning(f'买入委托 {code} {buy_volume}股\t现价:{price:.3f}')
             else:
                 break
@@ -327,7 +327,7 @@ def get_atr(row_close, row_high, row_low, period) -> float:
 def order_sell(code, price, volume, remark, log=True):
     if log:
         logging.warning(f'{remark} {code} {volume}股\t现价:{price:.3f}')
-    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, price, volume, remark, p.order_premium, STRATEGY_NAME)
+    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, price, volume, remark, 1 - p.order_premium, STRATEGY_NAME)
 
 
 def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None:
