@@ -228,7 +228,7 @@ def order_submit(
     curr_price: float,
     order_volume: int,
     order_remark: str,
-    order_premium: float = 1.00,
+    order_premium: float = 0.01,
     strategy_name: str = 'No Name',
 ):
     price_type = xtconstant.LATEST_PRICE
@@ -239,9 +239,9 @@ def order_submit(
     if get_code_exchange(code) == 'SH':
         price_type = xtconstant.MARKET_PEER_PRICE_FIRST
         if order_type == xtconstant.STOCK_SELL:
-            price = curr_price * order_premium
+            price = curr_price - order_premium
         elif order_type == xtconstant.STOCK_BUY:
-            price = curr_price * order_premium
+            price = curr_price + order_premium
 
     delegate.order_submit(
         stock_code=code,
