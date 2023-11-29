@@ -382,7 +382,7 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
             held_day = held_days[code]
             if held_day > p.hold_days and curr_time >= p.switch_begin:
                 switch_upper = cost_price * (1 + held_day * p.switch_multi)
-                switch_lower = cost_price * max((1 - held_day * p.switch_multi), p.lower_income)
+                switch_lower = cost_price * p.lower_income
                 if switch_lower < curr_price < switch_upper:
                     order_sell(code, curr_price, sell_volume, '换仓卖单')
 
