@@ -59,15 +59,16 @@ target_stock_prefixes = {  # set
 class p:
     # 下单持仓
     switch_begin = '09:45'  # 每天最早换仓时间
-    hold_days = 0           # 持仓天数
+    hold_days = 3           # 持仓天数
     max_count = 10          # 持股数量上限
     amount_each = 10000     # 每个仓的资金上限
     order_premium = 0.08    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
-    upper_income = 1.25     # 止盈率（ATR失效时使用）
+    upper_income = 1.15     # 止盈率（ATR失效时使用）
     lower_income = 0.97     # 止损率（ATR失效时使用）
-    switch_multi = 0.02     # 换仓乘数
+    sw_upper_multi = 0.02   # 换仓上限乘数
+    sw_lower_multi = 0.005  # 换仓下限乘数
     atr_time_period = 3     # 计算atr的天数
     atr_upper_multi = 1.25  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数
@@ -380,16 +381,17 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 
             # 换仓：未满足盈利目标的仓位
             held_day = held_days[code]
+            switch_upper = cost_price * (1 + held_day * p.sw_upper_multi)
+            switch_lower = cost_price * (p.lower_income + held_day * p.sw_lower_multi)
+
             if held_day > p.hold_days and curr_time >= p.switch_begin:
-                switch_upper = cost_price * (1 + held_day * p.switch_multi)
-                switch_lower = cost_price * p.lower_income
                 if switch_lower < curr_price < switch_upper:
                     order_sell(code, curr_price, sell_volume, '换仓卖单')
 
             # 判断持仓超过一天
             if held_day > 0:
                 if (code in quotes) and (code in cache_indicators):
-                    if curr_price <= cost_price * p.lower_income:
+                    if curr_price <= switch_lower:
                         # 绝对止损卖出
                         order_sell(code, curr_price, sell_volume, 'ABS止损委托')
                     elif curr_price >= cost_price * p.upper_income:
@@ -418,11 +420,11 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
                                             f'ATR止盈线:{atr_upper}')
                             order_sell(code, curr_price, sell_volume, 'ATR止盈委托', log=False)
                 else:
-                    if curr_price <= cost_price * p.lower_income:
-                        # 默认止损卖出
+                    if curr_price <= switch_lower:
+                        # 默认绝对止损卖出
                         order_sell(code, curr_price, sell_volume, 'DEF止损委托')
                     elif curr_price >= cost_price * p.upper_income:
-                        # 默认止盈卖出
+                        # 默认绝对止盈卖出
                         order_sell(code, curr_price, sell_volume, 'DEF止盈委托')
 
 
