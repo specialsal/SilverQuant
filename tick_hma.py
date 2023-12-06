@@ -8,7 +8,7 @@ import datetime
 import threading
 import schedule
 from random import random
-from typing import List, Dict, Set, Optional
+from typing import List, Dict, Set
 
 import numpy as np
 import talib as ta
@@ -78,8 +78,8 @@ class p:
     M = 40                  # 选股HMA中周期
     N = 60                  # 选股HMA长周期
     S = 5                   # 选股SMA周期
+    open_inc = 1.00         # 相对于开盘价涨幅阈值
     inc_limit = 1.02        # 相对于昨日收盘的涨幅限制
-    min_price = 2.00        # 限制最低可买入股票的现价
     # 历史指标
     day_count = 69          # 70个足够算出周期为60的 HMA
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
@@ -123,7 +123,7 @@ def held_increase() -> None:
     print(f'All held stock day +1!')
 
 
-def calculate_indicators(data: Dict) -> Optional[Dict]:
+def calculate_indicators(data: Dict, code: str) -> int:
     row_close = data['close']
     row_high = data['high']
     row_low = data['low']
@@ -133,13 +133,14 @@ def calculate_indicators(data: Dict) -> Optional[Dict]:
         high_3d = row_high.tail(p.atr_time_period).values
         low_3d = row_low.tail(p.atr_time_period).values
 
-        return {
+        cache_indicators[code] = {
             'PAST_69': row_close.tail(p.day_count).values,
             'CLOSE_3D': close_3d,
             'HIGH_3D': high_3d,
             'LOW_3D': low_3d,
         }
-    return None
+        return 1
+    return 0
 
 
 def prepare_by_xtdata(history_codes: List[str], start: str, end: str):
@@ -163,13 +164,10 @@ def prepare_by_xtdata(history_codes: List[str], start: str, end: str):
     cache_indicators.clear()
     count = 0
     for code in history_codes:
-        temp_dict = {}
+        temp_data = {}
         for col in p.data_cols:
-            temp_dict[col] = market_dict[col].loc[code]
-        temp_indicators = calculate_indicators(temp_dict)
-        if temp_indicators is not None:
-            cache_indicators[code] = temp_indicators
-            count += 1
+            temp_data[col] = market_dict[col].loc[code]
+        count += calculate_indicators(temp_data, code)
     return count
 
 
@@ -193,11 +191,8 @@ def prepare_by_tushare(history_codes: list, start: str, end: str) -> int:
         print(sub_codes)
 
         for code in sub_codes:
-            temp_data = temp_data[temp_data['ts_code'] == code]
-            temp_indicators = calculate_indicators(temp_data)
-            if temp_indicators is not None:
-                cache_indicators[code] = temp_indicators
-                count += 1
+            temp_df = temp_data[temp_data['ts_code'] == code]
+            count += calculate_indicators(temp_df, code)
 
     t1 = datetime.datetime.now()
     print(f'Prepared TIME COST: {t1 - t0}')
@@ -256,10 +251,10 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     curr_open = quote['open']
     last_close = quote['lastClose']
 
-    if not curr_close > p.min_price:
+    if not curr_close < last_close * p.inc_limit:
         return False, {}
 
-    if not curr_open < curr_close < last_close * p.inc_limit:
+    if not curr_close > curr_open * p.open_inc:
         return False, {}
 
     sma = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
