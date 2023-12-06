@@ -8,9 +8,10 @@ import datetime
 import threading
 import schedule
 from random import random
-from typing import List, Dict, Set
+from typing import List, Dict, Set, Optional, Union
 
 import numpy as np
+import pandas as pd
 import talib as ta
 from xtquant import xtconstant, xtdata
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
@@ -19,8 +20,8 @@ import tick_accounts
 from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
 from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init
-from tools.utils_cache import load_json, get_all_historical_codes, \
-    check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
+from tools.utils_cache import load_json, get_all_historical_codes, check_today_is_open_day, \
+    load_pickle, save_pickle, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
@@ -65,7 +66,7 @@ class p:
     order_premium = 0.08    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
-    upper_income = 1.15     # 止盈率（ATR失效时使用）
+    upper_income = 1.45     # 止盈率（ATR失效时使用）
     lower_income = 0.97     # 止损率（ATR失效时使用）
     sw_upper_multi = 0.02   # 换仓上限乘数
     sw_lower_multi = 0.005  # 换仓下限乘数
@@ -78,8 +79,8 @@ class p:
     M = 40                  # 选股HMA中周期
     N = 60                  # 选股HMA长周期
     S = 5                   # 选股SMA周期
-    open_inc = 1.00         # 相对于开盘价涨幅阈值
     inc_limit = 1.02        # 相对于昨日收盘的涨幅限制
+    min_price = 2.00        # 限制最低可买入股票的现价
     # 历史指标
     day_count = 69          # 70个足够算出周期为60的 HMA
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
@@ -123,68 +124,31 @@ def held_increase() -> None:
     print(f'All held stock day +1!')
 
 
-def calculate_indicators(data: Dict, code: str) -> int:
+def calculate_indicators(data: Union[Dict, pd.DataFrame]) -> Optional[Dict]:
     row_close = data['close']
     row_high = data['high']
     row_low = data['low']
 
-    if not row_close.isna().any() and len(row_close) == p.day_count:
-        close_3d = row_close.tail(p.atr_time_period).values
-        high_3d = row_high.tail(p.atr_time_period).values
-        low_3d = row_low.tail(p.atr_time_period).values
+    close_3d = row_close.tail(p.atr_time_period).values
+    high_3d = row_high.tail(p.atr_time_period).values
+    low_3d = row_low.tail(p.atr_time_period).values
 
-        cache_indicators[code] = {
-            'PAST_69': row_close.tail(p.day_count).values,
-            'CLOSE_3D': close_3d,
-            'HIGH_3D': high_3d,
-            'LOW_3D': low_3d,
-        }
-        return 1
-    return 0
+    return {
+        'PAST_69': row_close.tail(p.day_count).values,
+        'CLOSE_3D': close_3d,
+        'HIGH_3D': high_3d,
+        'LOW_3D': low_3d,
+    }
 
 
-def prepare_by_xtdata(history_codes: List[str], start: str, end: str):
-    print(f'Download time range: {start} - {end}')
-    t0 = datetime.datetime.now()
-    pre_download_xtdata(
-        history_codes,
-        start_date=start,
-        end_date=end,
-    )
-    t1 = datetime.datetime.now()
-    print(f'Download TIME COST: {t1 - t0}')
-
-    time.sleep(0.5)
-    market_dict = get_xtdata_market_dict(
-        codes=history_codes,
-        start_date=start,
-        end_date=end,
-        columns=p.data_cols)
-
-    cache_indicators.clear()
-    count = 0
-    for code in history_codes:
-        temp_data = {}
-        for col in p.data_cols:
-            temp_data[col] = market_dict[col].loc[code]
-        count += calculate_indicators(temp_data, code)
-    return count
-
-
-def prepare_by_tushare(history_codes: list, start: str, end: str) -> int:
+def prepare_by_tushare(history_codes: List, start: str, end: str) -> int:
     print(f'Prepared time range: {start} - {end}')
     t0 = datetime.datetime.now()
 
     cache_indicators.clear()
     count = 0
 
-    # for code in history_codes:
-    #     print(code)
-    #     temp_data = get_ts_market(code, start, end, p.data_cols)
-    #     if temp_data is not None:
-    #         count += calculate_indicators(temp_data, code)
-
-    group_size = 6000 // p.day_count
+    group_size = 6000 // p.day_count  # ts接口最大行数限制8000，保险起见设成6000
     for i in range(0, len(history_codes), group_size):
         sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
         temp_data = get_ts_markets(sub_codes, start, end, p.data_cols)
@@ -192,14 +156,16 @@ def prepare_by_tushare(history_codes: list, start: str, end: str) -> int:
 
         for code in sub_codes:
             temp_df = temp_data[temp_data['ts_code'] == code]
-            count += calculate_indicators(temp_df, code)
+            if not temp_df.isnull().values.any() and len(temp_df) == p.day_count:
+                cache_indicators[code] = calculate_indicators(temp_df)
+                count += 1
 
     t1 = datetime.datetime.now()
     print(f'Prepared TIME COST: {t1 - t0}')
     return count
 
 
-def prepare_indicators(use_xtdata: bool = False) -> None:
+def prepare_indicators() -> None:
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
 
@@ -218,13 +184,9 @@ def prepare_indicators(use_xtdata: bool = False) -> None:
         start = get_prev_trading_date(now, day_count)
         end = get_prev_trading_date(now, 1)
 
-        if use_xtdata:
-            count = prepare_by_xtdata(history_codes, start, end)
-        else:
-            count = prepare_by_tushare(history_codes, start, end)
-
+        count = prepare_by_tushare(history_codes, start, end)
         save_pickle(cache_path, cache_indicators)
-        print(f'{count} stocks prepared.')
+        print(f'{count} stock indicators saved to {cache_path}')
 
 
 # ======== 买点 ========
@@ -251,10 +213,10 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     curr_open = quote['open']
     last_close = quote['lastClose']
 
-    if not curr_close < last_close * p.inc_limit:
+    if not curr_close > p.min_price:
         return False, {}
 
-    if not curr_close > curr_open * p.open_inc:
+    if not curr_open < curr_close < last_close * p.inc_limit:
         return False, {}
 
     sma = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
