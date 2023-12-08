@@ -17,11 +17,10 @@ from xtquant import xtconstant, xtdata
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 import tick_accounts
-from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
 from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init
-from tools.utils_cache import load_json, get_all_historical_codes, check_today_is_open_day, \
-    load_pickle, save_pickle, all_held_inc, new_held, del_held
+from tools.utils_cache import load_json, get_all_historical_codes, get_blacklist_codes, \
+    check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
@@ -40,6 +39,7 @@ PATH_INFO = PATH_BASE + '/info-{}.pkl'      # 用来缓存当天的指标信息
 lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
 lock_held_op_cache = threading.Lock()       # 操作持仓数据缓存的锁
 
+cache_blacklist: Set[str] = set()           # 记录黑名单中的股票
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
 cache_select: Dict[str, Set] = {}           # 记录选股历史，去重
 cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
@@ -122,6 +122,13 @@ def held_increase() -> None:
 
     all_held_inc(lock_held_op_cache, PATH_HELD)
     print(f'All held stock day +1!')
+
+
+def refresh_blacklist():
+    cache_blacklist.clear()
+    black_codes = get_blacklist_codes(target_stock_prefixes)
+    cache_blacklist.update(black_codes)
+    print(f'Blacklist refreshed: {black_codes}')
 
 
 def calculate_indicators(data: Union[Dict, pd.DataFrame]) -> Optional[Dict]:
@@ -247,11 +254,12 @@ def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
         if code not in cache_indicators:
             continue
 
-        passed, info = decide_stock(quotes[code], cache_indicators[code])
-        if passed:
-            selection = {'code': code, 'price': quotes[code]['lastPrice']}
-            selection.update(info)
-            selections.append(selection)
+        if code not in cache_blacklist:    # 如果不在黑名单
+            passed, info = decide_stock(quotes[code], cache_indicators[code])
+            if passed:
+                selection = {'code': code, 'price': quotes[code]['lastPrice']}
+                selection.update(info)
+                selections.append(selection)
     return selections
 
 
@@ -481,6 +489,7 @@ if __name__ == '__main__':
     random_time = f'08:{str(math.floor(random() * 60)).zfill(2)}'
     schedule.every().day.at(random_time).do(random_check_open_day)
     schedule.every().day.at('09:10').do(held_increase)
+    schedule.every().day.at('09:11').do(refresh_blacklist)
     schedule.every().day.at('09:15').do(prepare_indicators)
     schedule.every().day.at('09:25').do(subscribe_tick)
     schedule.every().day.at('15:00').do(unsubscribe_tick)

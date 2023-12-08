@@ -17,8 +17,11 @@ OPEN_DAY_CACHE_PATH = '_cache/_open_day_list.csv'
 
 STOCK_LIST_PATH = '_cache/_stock_list.csv'
 STOCK_LIST_TXT_PATH = '_cache/_stock_list.txt'
-HISTORICAL_SYMBOLS = '_cache/_historical_symbols.txt'
 HISTORICAL_OPEN_DAYS_PATH = '_cache/_historical_open_days.csv'
+HISTORICAL_SYMBOLS = '_cache/_historical_symbols.txt'
+BLACKLIST_SYMBOLS = '_data/_blacklist_symbols.txt'
+
+INDEX_300_SYMBOL_PATH = '_cache/_index_300_symbols.csv'
 
 
 def load_pickle(path: str) -> Optional[dict]:
@@ -52,13 +55,13 @@ def save_json(path: str, var: dict) -> None:
 
 
 def daily_once(
-    lock: Optional[threading.Lock],   # None时不使用线程锁
-    memory_cache: Dict,     # 不能为None
-    file_cache_path: Optional[str],   # None时重启程序则失效
-    cache_key: str,
-    curr_date: str,
-    function: Callable,
-    *args,
+        lock: Optional[threading.Lock],   # None时不使用线程锁
+        memory_cache: Dict,     # 不能为None
+        file_cache_path: Optional[str],   # None时重启程序则失效
+        cache_key: str,
+        curr_date: str,
+        function: Callable,
+        *args,
 ) -> None:
     def _job():
         if cache_key in memory_cache:
@@ -246,13 +249,26 @@ def refresh_historical_stock_list():
         w.write('\n'.join(symbols))
 
 
-def get_all_historical_symbols():
+def get_blacklist_symbols() -> list:
+    with open(BLACKLIST_SYMBOLS, 'r') as r:
+        symbols = r.read().split('\n')
+    return symbols
+
+
+def get_blacklist_codes(target_stock_prefixes: set = None) -> list:
+    history_symbols = get_blacklist_symbols()
+    if target_stock_prefixes is None:
+        return [symbol_to_code(symbol) for symbol in history_symbols]
+    return [symbol_to_code(symbol) for symbol in history_symbols if symbol[:3] in target_stock_prefixes]
+
+
+def get_all_historical_symbols() -> list:
     with open(HISTORICAL_SYMBOLS, 'r') as r:
         symbols = r.read().split('\n')
     return symbols
 
 
-def get_all_historical_codes(target_stock_prefixes: set = None):
+def get_all_historical_codes(target_stock_prefixes: set = None) -> list:
     history_symbols = get_all_historical_symbols()
     if target_stock_prefixes is None:
         return [symbol_to_code(symbol) for symbol in history_symbols]
@@ -276,6 +292,24 @@ def get_historical_open_days(start_date: str = None, end_date: str = None):
 
     df = df.reset_index()
     return df
+
+
+def update_000300() -> None:
+    get_index_element('000300').to_csv(INDEX_300_SYMBOL_PATH)
+
+
+def get_index_element(index_symbol: str) -> pd.DataFrame:
+    return ak.index_stock_cons_csindex(symbol=index_symbol)
+
+
+def get_index_300_symbols():
+    df = pd.read_csv(INDEX_300_SYMBOL_PATH)
+    return [str(code).zfill(6) for code in df['成分券代码'].values]
+
+
+def get_index_300_codes():
+    df = pd.read_csv(INDEX_300_SYMBOL_PATH)
+    return [symbol_to_code(str(code).zfill(6)) for code in df['成分券代码'].values]
 
 
 def test_cache_held():
@@ -315,5 +349,13 @@ if __name__ == '__main__':
 
     # print(get_historical_open_days(end_date='20000101'))
     # test_cache_held()
-    test_check_today_is_open_day()
+    # test_check_today_is_open_day()
     # test_cache_pickle()
+
+    # 中证1000
+    # print(get_index_element("000852"))
+
+    # # 中证500
+    # print(get_index_element("000905"))
+
+    print(get_blacklist_codes({'000', '001', '002', '003'}))

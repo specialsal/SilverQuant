@@ -20,8 +20,8 @@ from data_loader.ak_sample import get_new_stock_list_date
 from data_loader.reader_xtdata import get_xtdata_market_dict, pre_download_xtdata
 from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init
-from tools.utils_cache import load_json, get_all_historical_codes, \
-    check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
+from tools.utils_cache import load_json, get_all_historical_codes, check_today_is_open_day, \
+    load_pickle, save_pickle, all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
@@ -39,7 +39,6 @@ PATH_INFO = PATH_BASE + '/info-{}.pkl'      # 用来缓存当天的指标信息
 
 lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
 lock_held_op_cache = threading.Lock()       # 操作持仓数据缓存的锁
-lock_daily_cronjob = threading.Lock()       # 标记每天一次执行的锁
 
 cache_blacklist: Set[str] = set()           # 记录黑名单中的股票
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
@@ -255,9 +254,10 @@ def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
         if code not in cache_indicators:
             continue
 
-        passed = decide_stock(quotes[code], cache_indicators[code])
-        if passed and code not in cache_blacklist:   # 如果不在黑名单
-            selections.append({'code': code, 'price': quotes[code]['lastPrice']})
+        if code not in cache_blacklist:    # 如果不在黑名单
+            passed = decide_stock(quotes[code], cache_indicators[code])
+            if passed:
+                selections.append({'code': code, 'price': quotes[code]['lastPrice']})
     return selections
 
 
