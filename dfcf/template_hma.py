@@ -3,24 +3,31 @@ from __future__ import print_function, absolute_import
 from gm.api import *
 
 import sys
+import math
+import logging
 import pandas as pd
-from typing import List, Dict, Optional
+from typing import List, Dict,Set, Optional
 
 import numpy as np
 import talib as ta
 
-from tools.utils_cache import get_all_historical_codes
+from tools.utils_cache import get_all_historical_codes, get_blacklist_codes
 from tools.utils_dfcf import code_to_dfcf_symbol, dfcf_symbol_to_code
 
 
-_BACKTEST_INTERVAL = '60s'
-_BACKTEST_START_TIME = '2023-12-01 09:30:00'
-_BACKTEST_END_TIME = '2023-12-05 15:00:00'
+_BACKTEST_INTERVAL = '300s'
+_BACKTEST_START_TIME = '2023-11-01 09:30:00'
+_BACKTEST_END_TIME = '2023-12-08 15:00:00'
 
-_cache_quotes = {}
+cache_blacklist: Set[str] = set()           # 记录黑名单中的股票
+cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
+cache_select: Dict[str, Set] = {}           # 记录选股历史，去重
+cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值
 
-positions = {}
 held_days = {}
+target_stock_prefixes = {
+    '000', '001', '002', '003',
+}
 
 
 class p:
@@ -52,13 +59,54 @@ class p:
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
 
 
+# ======== 盘前 ========
+
+
 def held_increase():
     for code in held_days:
         held_days[code] += 1
 
 
+def refresh_blacklist():
+    cache_blacklist.clear()
+    black_codes = get_blacklist_codes(target_stock_prefixes)
+    cache_blacklist.update(black_codes)
+    print(f'Blacklist refreshed: {black_codes}')
+
+
+def calculate_indicators(data: pd.DataFrame) -> Optional[Dict]:
+    row_close = data['close']
+    row_high = data['high']
+    row_low = data['low']
+
+    close_3d = row_close.tail(p.atr_time_period).values
+    high_3d = row_high.tail(p.atr_time_period).values
+    low_3d = row_low.tail(p.atr_time_period).values
+
+    return {
+        'PAST_69': row_close.tail(p.day_count).values,
+        'CLOSE_3D': close_3d,
+        'HIGH_3D': high_3d,
+        'LOW_3D': low_3d,
+    }
+
+
+def prepare_indicators(context) -> None:
+    history_codes = get_all_historical_codes(target_stock_prefixes)
+    count = 0
+    for code in history_codes:
+        temp_df = get_history_data(context, code, p.day_count, ['close', 'high', 'low'])
+        if not temp_df.isnull().values.any() and len(temp_df) == p.day_count:
+            cache_indicators[code] = calculate_indicators(temp_df)
+            count += 1
+    print(f'{count} stock indicators prepared')
+
+
+# ======== 买点 ========
+
+
 def order_buy(code: str, price: float, volume: int):
-    print(' 买入', code, price, volume)
+    logging.warning(' 买入', code, price, volume)
     order_volume(
         symbol=code_to_dfcf_symbol(code),
         volume=volume,
@@ -67,7 +115,6 @@ def order_buy(code: str, price: float, volume: int):
         position_effect=PositionEffect_Open,
         price=price,
     )
-    positions[code] = {'price': price, 'volume': volume}
     held_days[code] = 0
 
 
@@ -117,64 +164,81 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     return True, {}
 
 
-def calculate_indicators(data: pd.DataFrame) -> Optional[Dict]:
-    row_close = data['close']
-    row_high = data['high']
-    row_low = data['low']
-
-    if not row_close.isna().any() and len(row_close) == p.day_count:
-        close_3d = row_close.tail(p.atr_time_period).values
-        high_3d = row_high.tail(p.atr_time_period).values
-        low_3d = row_low.tail(p.atr_time_period).values
-
-        return {
-            'PAST_69': row_close.tail(p.day_count).values,
-            'CLOSE_3D': close_3d,
-            'HIGH_3D': high_3d,
-            'LOW_3D': low_3d,
-        }
-    return None
-
-
-def select_stocks(context, quotes: Dict) -> List[Dict[str, any]]:
+def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
     selections = []
     for code in quotes:
-        data = get_history_data(context, code, p.day_count, ['close', 'high', 'low'])
-        temp_indicator = calculate_indicators(data)
+        if code[:3] not in target_stock_prefixes:
+            continue
 
-        passed, info = decide_stock(quotes[code], temp_indicator)
-        if passed:
-            selection = {'code': code, 'price': quotes[code]['lastPrice']}
-            selection.update(info)
-            selections.append(selection)
+        if code not in cache_indicators:
+            continue
+
+        if code not in cache_blacklist:    # 如果不在黑名单
+            passed, info = decide_stock(quotes[code], cache_indicators[code])
+            if passed:
+                selection = {'code': code, 'price': quotes[code]['lastPrice']}
+                selection.update(info)
+                selections.append(selection)
     return selections
 
 
 def scan_buy(context, quotes, curr_date, curr_time):
-    selections = select_stocks(context, quotes)
+    selections = select_stocks(quotes)
     print(selections)
-    # for code in quotes:
-    #     quote = quotes[code]
-    #
-    #     last_close = quote['lastClose']
-    #     curr_open = quote['open']
-    #     curr_price = quote['lastPrice']
-    #     last_7d_close = get_history_data(context, code, 7, ['close']).head(1)['close'][0]
-    #
-    #     if (
-    #         curr_price > 2.00
-    #         and (curr_open < last_close * p.low_open)
-    #         and (last_close * p.turn_red_lower < curr_price < last_close * p.turn_red_upper)
-    #         and (curr_price < last_7d_close * 1.3)
-    #         and len(positions.keys()) < 10
-    #         and code not in positions
-    #     ):
-    #         print(curr_date, curr_time, end='')
-    #         order_buy(code, curr_price, int(100 // curr_price * 100))
+
+    # 选出一个以上的股票
+    if len(selections) > 0:
+        selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
+
+        position_codes = [
+            dfcf_symbol_to_code(position['symbol'])
+            for position in context.account().positions()
+        ]
+        position_count = len(position_codes)
+        available_cash = context.account().cash['available']
+
+        buy_count = max(0, p.max_count - position_count)            # 确认剩余的仓位
+        buy_count = min(buy_count, available_cash // p.amount_each)     # 确认现金够用
+        buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
+        buy_count = min(buy_count, p.upper_buy_count)               # 限制一秒内下单数量
+        buy_count = int(buy_count)
+
+        for i in range(len(selections)):  # 依次买入
+            if buy_count > 0:
+                code = selections[i]['code']
+                price = selections[i]['price']
+                buy_volume = math.floor(p.amount_each / price / 100) * 100
+
+                if buy_volume <= 0:
+                    logging.debug(f'{code} 价格过高')
+                elif code in position_codes:
+                    logging.debug(f'{code} 正在持仓')
+                elif curr_date in cache_select and code in cache_select[curr_date]:
+                    logging.debug(f'{code} 今日已选')
+                else:
+                    buy_count = buy_count - 1
+
+                    # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
+                    order_buy(code, price, buy_volume)
+            else:
+                break
 
 
-def order_sell(code, price, volume):
-    print(' 卖出', code, price, volume)
+# ======== 卖点 ========
+
+
+def get_sma(row_close, period) -> float:
+    sma = ta.SMA(row_close, timeperiod=period)
+    return sma[-1]
+
+
+def get_atr(row_close, row_high, row_low, period) -> float:
+    atr = ta.ATR(row_high, row_low, row_close, timeperiod=period)
+    return atr[-1]
+
+
+def order_sell(code, price, volume, remark):
+    logging.warning(f' {remark} ', code, price, volume)
     order_volume(
         symbol=code_to_dfcf_symbol(code),
         volume=volume,
@@ -186,24 +250,63 @@ def order_sell(code, price, volume):
 
 
 def scan_sell(context, quotes, curr_date, curr_time):
-    pass
-    # codes_sold = set()
-    # for code in positions:
-    #     if code in quotes and held_days[code] > 0:
-    #         curr_price = quotes[code]['lastPrice']
-    #         open_price = positions[code]['price']
-    #         if curr_price > open_price * 1.09:
-    #             print(curr_date, curr_time, end='')
-    #             codes_sold.add(code)
-    #             order_sell(code, curr_price, positions[code]['volume'])
-    #         if curr_price < open_price * 1.05:
-    #             print(curr_date, curr_time, end='')
-    #             codes_sold.add(code)
-    #             order_sell(code, curr_price, positions[code]['volume'])
-    #
-    # for code in codes_sold:
-    #     del positions[code]
-    #     del held_days[code]
+
+    for position in context.account().positions():
+        code = dfcf_symbol_to_code(position['symbol'])
+        if (code in quotes) and (code in held_days):
+            # 如果有数据且有持仓时间记录
+            quote = quotes[code]
+            curr_price = quote['lastPrice']
+            cost_price = position['vwap']
+            sell_volume = position['volume']
+
+            # 换仓：未满足盈利目标的仓位
+            held_day = held_days[code]
+            switch_upper = cost_price * (1 + held_day * p.sw_upper_multi)
+            switch_lower = cost_price * (p.lower_income + held_day * p.sw_lower_multi)
+
+            if held_day > p.hold_days and curr_time >= p.switch_begin:
+                if switch_lower < curr_price < switch_upper:
+                    order_sell(code, curr_price, sell_volume, '换仓卖单')
+
+            # 判断持仓超过一天
+            if held_day > 0:
+                if (code in quotes) and (code in cache_indicators):
+                    if curr_price <= switch_lower:
+                        # 绝对止损卖出
+                        order_sell(code, curr_price, sell_volume, 'ABS止损委托')
+                    elif curr_price >= cost_price * p.upper_income:
+                        # 绝对止盈卖出
+                        order_sell(code, curr_price, sell_volume, 'ABS止盈委托')
+                    else:
+                        quote = quotes[code]
+                        close = np.append(cache_indicators[code]['CLOSE_3D'], quote['lastPrice'])
+                        high = np.append(cache_indicators[code]['HIGH_3D'], quote['high'])
+                        low = np.append(cache_indicators[code]['LOW_3D'], quote['low'])
+
+                        sma = get_sma(close, p.sma_time_period)
+                        atr = get_atr(close, high, low, p.atr_time_period)
+
+                        atr_upper = sma + atr * p.atr_upper_multi
+                        atr_lower = sma - atr * p.atr_lower_multi
+
+                        if curr_price <= atr_lower:
+                            # ATR止损卖出
+                            logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                            f'ATR止损线:{atr_lower}')
+                            order_sell(code, curr_price, sell_volume, 'ATR止损委托')
+                        elif curr_price >= atr_upper:
+                            # ATR止盈卖出
+                            logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                            f'ATR止盈线:{atr_upper}')
+                            order_sell(code, curr_price, sell_volume, 'ATR止盈委托')
+                else:
+                    if curr_price <= switch_lower:
+                        # 默认绝对止损卖出
+                        order_sell(code, curr_price, sell_volume, 'DEF止损委托')
+                    elif curr_price >= cost_price * p.upper_income:
+                        # 默认绝对止盈卖出
+                        order_sell(code, curr_price, sell_volume, 'DEF止盈委托')
 
 
 def execute_strategy(context, curr_date: str, curr_time: str, prev_time: str, quotes: dict):
@@ -211,6 +314,7 @@ def execute_strategy(context, curr_date: str, curr_time: str, prev_time: str, qu
     if prev_time == '09:30':
         print(f'{curr_date} ==========')
         held_increase()
+        prepare_indicators(context)
 
     print(curr_date, curr_time, len(quotes))
     # 早盘
@@ -226,6 +330,7 @@ def execute_strategy(context, curr_date: str, curr_time: str, prev_time: str, qu
 
 
 def init(context):
+    refresh_blacklist()
     context.backtest_interval = _BACKTEST_INTERVAL
     context.period = p.day_count
     # context.symbol = [
@@ -234,7 +339,7 @@ def init(context):
     # ]
     context.symbol = [
         code_to_dfcf_symbol(code)
-        for code in get_all_historical_codes({'002'})
+        for code in get_all_historical_codes(target_stock_prefixes)
     ]
 
     # 订阅行情
@@ -259,18 +364,18 @@ def on_bar(context, bars):
     curr_date = now.strftime('%Y-%m-%d')
     curr_time = now.strftime('%H:%M')
     prev_time = bars[0]['bob'].strftime('%H:%M')
-    # print(curr_date, curr_time, bars)
+    # print(curr_date, prev_time, curr_time, bars)
 
     # 如果全天无量则说明停牌：删除股票
     if curr_time == '15:00':
         suspensions = set()
-        for code in _cache_quotes:
-            if _cache_quotes[code]['lastPrice'] == 0:
+        for code in cache_quotes:
+            if cache_quotes[code]['lastPrice'] == 0:
                 suspensions.add(code)
-                print(f'当日停牌 {curr_date} {code} {_cache_quotes[code]}')
+                print(f'当日停牌 {curr_date} {code} {cache_quotes[code]}')
 
         for code in suspensions:
-            del _cache_quotes[code]
+            del cache_quotes[code]
 
     # 报价单改成统一的格式
     for bar in bars:
@@ -280,43 +385,40 @@ def on_bar(context, bars):
         bar['high'] = round(bar['high'], 3)
         bar['low'] = round(bar['low'], 3)
 
-        if code not in _cache_quotes:
-            _cache_quotes[code] = {'lastClose': None}
-            _cache_quotes[code]['lastPrice'] = bar['close']
-            _cache_quotes[code]['open'] = bar['open']
-            _cache_quotes[code]['high'] = bar['high']
-            _cache_quotes[code]['low'] = bar['low']
-            _cache_quotes[code]['volume'] = bar['volume']
-            _cache_quotes[code]['amount'] = bar['amount']
+        if code not in cache_quotes:
+            cache_quotes[code] = {'lastClose': None}
+            cache_quotes[code]['lastPrice'] = bar['close']
+            cache_quotes[code]['open'] = bar['open']
+            cache_quotes[code]['high'] = bar['high']
+            cache_quotes[code]['low'] = bar['low']
+            cache_quotes[code]['volume'] = bar['volume']
+            cache_quotes[code]['amount'] = bar['amount']
 
-        if prev_time > '09:30' and curr_time < '15:00':
-            _cache_quotes[code]['lastPrice'] = bar['close']
-            try:
-                if _cache_quotes[code]['open'] == 0:
-                    _cache_quotes[code]['open'] = bar['open']
-            except:
-                print(_cache_quotes)
-            _cache_quotes[code]['high'] = max(_cache_quotes[code]['high'], bar['high'])
-            _cache_quotes[code]['low'] = min(_cache_quotes[code]['low'], bar['low'])
-            _cache_quotes[code]['volume'] = _cache_quotes[code]['volume'] + bar['volume']
-            _cache_quotes[code]['amount'] = _cache_quotes[code]['amount'] + bar['amount']
+        if '09:30' < curr_time < '15:00':
+            cache_quotes[code]['lastPrice'] = bar['close']
+            if cache_quotes[code]['open'] == 0:
+                cache_quotes[code]['open'] = bar['open']
+            cache_quotes[code]['high'] = max(cache_quotes[code]['high'], bar['high'])
+            cache_quotes[code]['low'] = min(cache_quotes[code]['low'], bar['low'])
+            cache_quotes[code]['volume'] = cache_quotes[code]['volume'] + bar['volume']
+            cache_quotes[code]['amount'] = cache_quotes[code]['amount'] + bar['amount']
 
         # 如果停牌或者开盘成交量为0则标记为0
         elif curr_time == '15:00':
-            _cache_quotes[code].clear()
-            _cache_quotes[code]['lastClose'] = bar['close']
-            _cache_quotes[code]['lastPrice'] = 0
-            _cache_quotes[code]['open'] = 0
-            _cache_quotes[code]['high'] = 0
-            _cache_quotes[code]['low'] = 0
-            _cache_quotes[code]['volume'] = 0
-            _cache_quotes[code]['amount'] = 0
+            cache_quotes[code].clear()
+            cache_quotes[code]['lastClose'] = bar['close']
+            cache_quotes[code]['lastPrice'] = 0
+            cache_quotes[code]['open'] = 0
+            cache_quotes[code]['high'] = 0
+            cache_quotes[code]['low'] = 0
+            cache_quotes[code]['volume'] = 0
+            cache_quotes[code]['amount'] = 0
 
     # 执行预定策略
     if '09:30' < curr_time <= '14:57':
         legal_quotes = {
             k: v
-            for k, v in _cache_quotes.items()
+            for k, v in cache_quotes.items()
             if v['lastClose'] is not None and v['lastPrice'] != 0
         }
         if len(legal_quotes) > 0:
@@ -338,13 +440,13 @@ if __name__ == '__main__':
     '''
     run(
         strategy_id='7fb51459-7b32-11ee-8dbe-182649765b57',
-        filename=sys.argv[0].split('/')[-1],
+        filename=sys.argv[0].split('\\')[-1],
         mode=MODE_BACKTEST,
         token='970a008e02b631efd0d7fa53caeed0ee700e2342',
         backtest_start_time=_BACKTEST_START_TIME,
         backtest_end_time=_BACKTEST_END_TIME,
         backtest_adjust=ADJUST_PREV,
-        backtest_initial_cash=1000,
+        backtest_initial_cash=100000,
         backtest_commission_ratio=0.0001,
         backtest_slippage_ratio=0.0001,
     )

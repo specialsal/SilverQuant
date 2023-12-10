@@ -272,16 +272,16 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
 
         position_codes = [position.stock_code for position in positions]
         position_count = get_holding_position_count(positions)
-        asset = xt_delegate.check_asset()
+        available_cash = xt_delegate.check_asset().cash
 
         buy_count = max(0, p.max_count - position_count)            # 确认剩余的仓位
-        buy_count = min(buy_count, asset.cash // p.amount_each)     # 确认现金够用
+        buy_count = min(buy_count, available_cash // p.amount_each)     # 确认现金够用
         buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
         buy_count = min(buy_count, p.upper_buy_count)               # 限制一秒内下单数量
         buy_count = int(buy_count)
 
         for i in range(len(selections)):  # 依次买入
-            logging.debug(f'买数相关：持仓{position_count} 现金{asset.cash} 已选{len(selections)}')
+            logging.debug(f'买数相关：持仓{position_count} 现金{available_cash} 已选{len(selections)}')
             if buy_count > 0:
                 code = selections[i]['code']
                 price = selections[i]['price']
