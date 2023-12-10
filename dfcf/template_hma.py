@@ -16,7 +16,7 @@ from tools.utils_dfcf import code_to_dfcf_symbol, dfcf_symbol_to_code
 
 
 _BACKTEST_INTERVAL = '300s'
-_BACKTEST_START_TIME = '2023-11-01 09:30:00'
+_BACKTEST_START_TIME = '2023-06-01 09:30:00'
 _BACKTEST_END_TIME = '2023-12-08 15:00:00'
 
 cache_blacklist: Set[str] = set()           # 记录黑名单中的股票
@@ -106,7 +106,7 @@ def prepare_indicators(context) -> None:
 
 
 def order_buy(code: str, price: float, volume: int):
-    logging.warning(' 买入', code, price, volume)
+    logging.warning(f' 买入: {code}, {price}, {volume}')
     order_volume(
         symbol=code_to_dfcf_symbol(code),
         volume=volume,
@@ -238,7 +238,7 @@ def get_atr(row_close, row_high, row_low, period) -> float:
 
 
 def order_sell(code, price, volume, remark):
-    logging.warning(f' {remark} ', code, price, volume)
+    logging.warning(f' {remark} {code}, {price}, {volume}')
     order_volume(
         symbol=code_to_dfcf_symbol(code),
         volume=volume,
@@ -292,13 +292,9 @@ def scan_sell(context, quotes, curr_date, curr_time):
 
                         if curr_price <= atr_lower:
                             # ATR止损卖出
-                            logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'ATR止损线:{atr_lower}')
                             order_sell(code, curr_price, sell_volume, 'ATR止损委托')
                         elif curr_price >= atr_upper:
                             # ATR止盈卖出
-                            logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'ATR止盈线:{atr_upper}')
                             order_sell(code, curr_price, sell_volume, 'ATR止盈委托')
                 else:
                     if curr_price <= switch_lower:
