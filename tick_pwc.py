@@ -27,11 +27,11 @@ from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
 
 # ======== 配置 ========
-STRATEGY_NAME = '银狐二号'
-QMT_ACCOUNT_ID = tick_accounts.YH_QMT_ACCOUNT_ID
-QMT_CLIENT_PATH = tick_accounts.YH_QMT_CLIENT_PATH
+STRATEGY_NAME = '冬白一号'
+QMT_ACCOUNT_ID = tick_accounts.DB_QMT_ACCOUNT_ID
+QMT_CLIENT_PATH = tick_accounts.DB_QMT_CLIENT_PATH
 
-PATH_BASE = tick_accounts.YH_CACHE_BASE_PATH
+PATH_BASE = tick_accounts.DB_CACHE_BASE_PATH
 PATH_HELD = PATH_BASE + '/held_days.json'   # 记录持仓日期
 PATH_DATE = PATH_BASE + '/curr_date.json'   # 用来标记每天一次的缓存
 PATH_LOGS = PATH_BASE + '/logs.txt'         # 用来存储选股和委托操作
@@ -157,7 +157,7 @@ def prepare_by_tushare(history_codes: List, start: str, end: str) -> int:
     cache_indicators.clear()
     count = 0
 
-    group_size = 6000 // p.day_count  # ts接口最大行数限制8000，保险起见设成6000
+    group_size = min(6000 // p.day_count, 300)  # ts接口最大行数限制8000，保险起见设成6000
     for i in range(0, len(history_codes), group_size):
         sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
         temp_data = get_ts_markets(sub_codes, start, end, p.data_cols)
@@ -229,6 +229,7 @@ def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
 
 def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
     selections = select_stocks(quotes)
+    print(selections)
 
     # 选出一个以上的股票
     if len(selections) > 0:
