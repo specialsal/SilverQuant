@@ -10,7 +10,7 @@ import pandas as pd
 import akshare as ak
 
 from tools.tushare_token import get_tushare_pro
-from tools.utils_basic import symbol_to_code
+from tools.utils_basic import symbol_to_code, pd_show_all
 
 open_day_cache = {}
 OPEN_DAY_CACHE_PATH = '_cache/_open_day_list.csv'
@@ -21,7 +21,15 @@ HISTORICAL_OPEN_DAYS_PATH = '_cache/_historical_open_days.csv'
 HISTORICAL_SYMBOLS = '_cache/_historical_symbols.txt'
 BLACKLIST_SYMBOLS = '_data/_blacklist_symbols.txt'
 
-INDEX_300_SYMBOL_PATH = '_cache/_index_300_symbols.csv'
+INDEX_SH_ZS = '000001'
+INDEX_SH_50 = '000016'
+INDEX_SZ_CZ = '399001'
+INDEX_SZ_100 = '399330'
+INDEX_HS_300 = '000300'
+INDEX_ZZ_500 = '000905'
+INDEX_ZZ_800 = '000906'
+INDEX_ZZ_1000 = '000852'
+INDEX_ZZ_2000 = '932000'
 
 
 def load_pickle(path: str) -> Optional[dict]:
@@ -55,13 +63,13 @@ def save_json(path: str, var: dict) -> None:
 
 
 def daily_once(
-        lock: Optional[threading.Lock],   # None时不使用线程锁
-        memory_cache: Dict,     # 不能为None
-        file_cache_path: Optional[str],   # None时重启程序则失效
-        cache_key: str,
-        curr_date: str,
-        function: Callable,
-        *args,
+    lock: Optional[threading.Lock],   # None时不使用线程锁
+    memory_cache: Dict,     # 不能为None
+    file_cache_path: Optional[str],   # None时重启程序则失效
+    cache_key: str,
+    curr_date: str,
+    function: Callable,
+    *args,
 ) -> None:
     def _job():
         if cache_key in memory_cache:
@@ -262,6 +270,16 @@ def get_blacklist_codes(target_stock_prefixes: set = None) -> list:
     return [symbol_to_code(symbol) for symbol in history_symbols if symbol[:3] in target_stock_prefixes]
 
 
+def get_market_value_top_codes(market_value_top: int):
+    # samples()
+    df = ak.stock_zh_a_spot_em()
+    df = df.sort_values('代码')
+    df = df[['代码', '名称', '总市值', '流通市值']]
+    df = df[df['总市值'] < market_value_top]
+    df = df[df['代码'].str.startswith(('00', '60'))]
+    return [symbol_to_code(symbol) for symbol in list(df['代码'].values)]
+
+
 def get_all_historical_symbols() -> list:
     with open(HISTORICAL_SYMBOLS, 'r') as r:
         symbols = r.read().split('\n')
@@ -294,22 +312,19 @@ def get_historical_open_days(start_date: str = None, end_date: str = None):
     return df
 
 
-def update_000300() -> None:
-    get_index_element('000300').to_csv(INDEX_300_SYMBOL_PATH)
-
-
 def get_index_element(index_symbol: str) -> pd.DataFrame:
+
     return ak.index_stock_cons_csindex(symbol=index_symbol)
 
 
-def get_index_300_symbols():
-    df = pd.read_csv(INDEX_300_SYMBOL_PATH)
-    return [str(code).zfill(6) for code in df['成分券代码'].values]
+def get_index_symbols(index_symbol: str):
+    df = ak.index_stock_cons(symbol=index_symbol)
+    return [str(code).zfill(6) for code in df['品种代码'].values]
 
 
-def get_index_300_codes():
-    df = pd.read_csv(INDEX_300_SYMBOL_PATH)
-    return [symbol_to_code(str(code).zfill(6)) for code in df['成分券代码'].values]
+def get_index_codes(index_symbol: str):
+    df = ak.index_stock_cons(symbol=index_symbol)
+    return [symbol_to_code(str(code).zfill(6)) for code in df['品种代码'].values]
 
 
 def test_cache_held():
@@ -334,8 +349,7 @@ def test_cache_pickle():
 
 
 if __name__ == '__main__':
-    # from tools.utils_basic import pd_show_all
-    # pd_show_all()
+    pd_show_all()
 
     # update_open_day_list(
     #     '20220101',
@@ -352,10 +366,8 @@ if __name__ == '__main__':
     # test_check_today_is_open_day()
     # test_cache_pickle()
 
-    # 中证1000
-    # print(get_index_element("000852"))
+    # print(get_index_element(INDEX_SH_50))
+    # print(get_blacklist_codes({'000', '001', '002', '003'}))
 
-    # # 中证500
-    # print(get_index_element("000905"))
-
-    print(get_blacklist_codes({'000', '001', '002', '003'}))
+    print(get_market_value_top_codes(3000000000))
+    print(get_blacklist_codes())

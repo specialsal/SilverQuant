@@ -19,8 +19,10 @@ from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 import tick_accounts
 from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init
-from tools.utils_cache import load_json, get_all_historical_codes, get_blacklist_codes, \
-    check_today_is_open_day, load_pickle, save_pickle, all_held_inc, new_held, del_held
+from tools.utils_cache import load_json, get_all_historical_codes, \
+    get_blacklist_codes, get_market_value_top_codes, \
+    check_today_is_open_day, load_pickle, save_pickle, \
+    all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
@@ -121,14 +123,19 @@ def held_increase() -> None:
         return
 
     all_held_inc(lock_held_op_cache, PATH_HELD)
-    print(f'All held stock day +1!')
+    print(f'All held stock day +1.')
 
 
 def refresh_blacklist():
     cache_blacklist.clear()
+
     black_codes = get_blacklist_codes(target_stock_prefixes)
     cache_blacklist.update(black_codes)
-    print(f'Blacklist refreshed: {black_codes}')
+
+    limit_codes = get_market_value_top_codes(3000000000)
+    cache_blacklist.update(limit_codes)
+
+    print(f'Blacklist refreshed.')
 
 
 def calculate_indicators(data: Union[Dict, pd.DataFrame]) -> Optional[Dict]:
@@ -155,7 +162,7 @@ def prepare_by_tushare(history_codes: List, start: str, end: str) -> int:
     cache_indicators.clear()
     count = 0
 
-    group_size = 6000 // p.day_count  # ts接口最大行数限制8000，保险起见设成6000
+    group_size = min(6000 // p.day_count, 300)  # ts接口最大行数限制8000，保险起见设成6000
     for i in range(0, len(history_codes), group_size):
         sub_codes = [sub_code for sub_code in history_codes[i:i + group_size]]
         temp_data = get_ts_markets(sub_codes, start, end, p.data_cols)
