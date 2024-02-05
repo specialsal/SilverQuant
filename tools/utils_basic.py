@@ -3,10 +3,10 @@ import pandas as pd
 
 
 def pd_show_all() -> None:
-    pd.set_option('display.width', 1000)
+    pd.set_option('display.width', None)
     pd.set_option('display.min_rows', 1000)
     pd.set_option('display.max_rows', 5000)
-    pd.set_option('display.max_columns', 20)
+    pd.set_option('display.max_columns', 200)
     pd.set_option('display.unicode.ambiguous_as_wide', True)
     pd.set_option('display.unicode.east_asian_width', True)
     pd.set_option('display.float_format', lambda x: f'{x:.3f}')
@@ -75,6 +75,19 @@ def get_code_exchange(code: str) -> str:
     return arr[1][:2]
 
 
+def map_num_to_chr(num):
+    quotient = num // 100
+    if quotient < 10:
+        return chr(quotient + 48)  # 将数字转换为对应的 ASCII 字符
+    elif quotient < 36:
+        return chr(quotient - 10 + 97)  # 将数字转换为小写字母
+    elif quotient < 62:
+        return chr(quotient - 36 + 65)  # 将数字转换为大写字母
+    else:
+        return '.'
+
+
 if __name__ == '__main__':
-    logging_init()
+    # logging_init()
     # logging.warning('123456')
+    print(map_num_to_chr(6300))

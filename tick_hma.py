@@ -18,7 +18,7 @@ from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
 import tick_accounts
 from data_loader.reader_tushare import get_ts_markets
-from tools.utils_basic import logging_init
+from tools.utils_basic import logging_init, map_num_to_chr
 from tools.utils_cache import load_json, get_all_historical_codes, \
     get_blacklist_codes, get_market_value_top_codes, \
     check_today_is_open_day, load_pickle, save_pickle, \
@@ -73,7 +73,7 @@ class p:
     sw_upper_multi = 0.02   # 换仓上限乘数
     sw_lower_multi = 0.005  # 换仓下限乘数
     atr_time_period = 3     # 计算atr的天数
-    atr_upper_multi = 1.25  # 止盈atr的乘数
+    atr_upper_multi = 1.35  # 止盈atr的乘数
     atr_lower_multi = 0.85  # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数
     # 策略参数
@@ -410,7 +410,7 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
     # 早盘
-    if '09:31' <= curr_time <= '11:30':
+    if '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
         if '09:32' <= curr_time:
@@ -441,7 +441,7 @@ def callback_sub_whole(quotes: Dict) -> None:
 
             # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
-                print('.' if len(cache_quotes) > 0 else 'x', end='')
+                print(map_num_to_chr(len(cache_quotes)), end='')
                 execute_strategy(curr_date, curr_time, cache_quotes)
                 cache_quotes.clear()
             else:
