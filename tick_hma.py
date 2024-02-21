@@ -68,12 +68,13 @@ class p:
     order_premium = 0.08    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 止盈止损
+    switch_max_raise = 0.02   # 换仓上限乘数
     upper_income = 1.45     # 止盈率（ATR失效时使用）
     lower_income = 0.97     # 止损率（ATR失效时使用）
-    sw_upper_multi = 0.02   # 换仓上限乘数
-    sw_lower_multi = 0.005  # 换仓下限乘数
+    lower_raise = 0.005     # 换仓下限乘数
     atr_time_period = 3     # 计算atr的天数
-    atr_upper_multi = 1.35  # 止盈atr的乘数
+    atr_upper_multi = 1.38  # 止盈atr的乘数
+    atr_upper_drop = 0.03   # 止盈atr的每日递减
     atr_lower_multi = 0.85  # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数
     # 策略参数
@@ -93,13 +94,13 @@ class MyCallback(XtBaseCallback):
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'B')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '+')
             new_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'S')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '-')
             del_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
@@ -233,9 +234,9 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     if not curr_open < curr_close < last_close * p.inc_limit:
         return False, {}
 
-    sma = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
-    if not (sma < last_close):
-        return False, {}
+    # sma = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
+    # if not (sma < last_close):
+    #     return False, {}
 
     hma60 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
     if not (curr_open < hma60 < curr_close):
@@ -249,7 +250,7 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     if not (curr_open < hma20 < curr_close):
         return False, {}
 
-    return True, {'hma20': hma20, 'hma40': hma40, 'hma60': hma60, 'sma': sma}
+    return True, {}
 
 
 def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
@@ -319,10 +320,11 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
             logging.warning(
                 f"记录选股 {selection['code']}"
                 f"\t现价: {selection['price']:.2f}"
-                f"\tHMA_20: {selection['hma20']:.2f}"
-                f"\tHMA_40: {selection['hma40']:.2f}"
-                f"\tHMA_60: {selection['hma60']:.2f}"
-                f"\tSMA: {selection['sma']:.2f}")
+                # f"\tHMA_20: {selection['hma20']:.2f}"
+                # f"\tHMA_40: {selection['hma40']:.2f}"
+                # f"\tHMA_60: {selection['hma60']:.2f}"
+                # f"\tSMA: {selection['sma']:.2f}"
+            )
 
 
 # ======== 卖点 ========
@@ -358,8 +360,8 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 
             # 换仓：未满足盈利目标的仓位
             held_day = held_days[code]
-            switch_upper = cost_price * (1 + held_day * p.sw_upper_multi)
-            switch_lower = cost_price * (p.lower_income + held_day * p.sw_lower_multi)
+            switch_upper = cost_price * (1 + held_day * p.switch_max_raise)
+            switch_lower = cost_price * (p.lower_income + held_day * p.lower_raise)
 
             if held_day > p.hold_days and curr_time >= p.switch_begin:
                 if switch_lower < curr_price < switch_upper:
@@ -383,7 +385,7 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
                         sma = get_sma(close, p.sma_time_period)
                         atr = get_atr(close, high, low, p.atr_time_period)
 
-                        atr_upper = sma + atr * p.atr_upper_multi
+                        atr_upper = sma + atr * (p.atr_upper_multi - held_day * p.atr_upper_drop)
                         atr_lower = sma - atr * p.atr_lower_multi
 
                         if curr_price <= atr_lower:
@@ -445,7 +447,7 @@ def callback_sub_whole(quotes: Dict) -> None:
                 execute_strategy(curr_date, curr_time, cache_quotes)
                 cache_quotes.clear()
             else:
-                print('-', end='')
+                print('_', end='')
 
 
 def subscribe_tick():
