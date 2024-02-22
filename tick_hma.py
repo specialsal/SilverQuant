@@ -67,15 +67,18 @@ class p:
     amount_each = 10000     # 每个仓的资金上限
     order_premium = 0.08    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
-    # 止盈止损
-    switch_max_raise = 0.02   # 换仓上限乘数
-    upper_income = 1.45     # 止盈率（ATR失效时使用）
-    lower_income = 0.97     # 止损率（ATR失效时使用）
-    lower_raise = 0.005     # 换仓下限乘数
+    # 绝对止盈止损
+    switch_max_rise = 0.02  # 换仓上限乘数
+    max_income = 1.45       # 止盈率（ATR失效时使用）
+    min_income = 0.97       # 止损率（ATR失效时使用）
+    min_rise = 0.005        # 换仓下限乘数
+    # 动态止盈止损
+    atr_threshold = 1.05    # 高低涨幅确定atr止盈的分界
     atr_time_period = 3     # 计算atr的天数
-    atr_upper_multi = 1.38  # 止盈atr的乘数
-    atr_upper_drop = 0.03   # 止盈atr的每日递减
-    atr_lower_multi = 0.85  # 止损atr的乘数
+    atr_max_h_ratio = 1.36  # 高位止盈atr的乘数
+    atr_max_l_ratio = 1.03  # 低位止盈atr的乘数
+    atr_max_drop = 0.01     # 止盈atr的每日递减
+    atr_min_ratio = 0.85    # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数
     # 策略参数
     L = 20                  # 选股HMA短周期
@@ -94,13 +97,13 @@ class MyCallback(XtBaseCallback):
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '+')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '[BUY]')
             new_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '-')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '[SELL]')
             del_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
@@ -360,8 +363,8 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 
             # 换仓：未满足盈利目标的仓位
             held_day = held_days[code]
-            switch_upper = cost_price * (1 + held_day * p.switch_max_raise)
-            switch_lower = cost_price * (p.lower_income + held_day * p.lower_raise)
+            switch_upper = cost_price * (1 + held_day * p.switch_max_rise)
+            switch_lower = cost_price * (p.min_income + held_day * p.min_rise)
 
             if held_day > p.hold_days and curr_time >= p.switch_begin:
                 if switch_lower < curr_price < switch_upper:
@@ -373,7 +376,7 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
                     if curr_price <= switch_lower:
                         # 绝对止损卖出
                         order_sell(code, curr_price, sell_volume, 'ABS止损委托')
-                    elif curr_price >= cost_price * p.upper_income:
+                    elif curr_price >= cost_price * p.max_income:
                         # 绝对止盈卖出
                         order_sell(code, curr_price, sell_volume, 'ABS止盈委托')
                     else:
@@ -385,24 +388,35 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
                         sma = get_sma(close, p.sma_time_period)
                         atr = get_atr(close, high, low, p.atr_time_period)
 
-                        atr_upper = sma + atr * (p.atr_upper_multi - held_day * p.atr_upper_drop)
-                        atr_lower = sma - atr * p.atr_lower_multi
-
+                        # ATR 止损委托
+                        atr_lower = sma - atr * p.atr_min_ratio
                         if curr_price <= atr_lower:
                             # ATR止损卖出
                             logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
                                             f'ATR止损线:{atr_lower}')
                             order_sell(code, curr_price, sell_volume, 'ATR止损委托', log=False)
-                        elif curr_price >= atr_upper:
-                            # ATR止盈卖出
-                            logging.warning(f'ATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'ATR止盈线:{atr_upper}')
-                            order_sell(code, curr_price, sell_volume, 'ATR止盈委托', log=False)
+
+                        # 分段ATR 止盈委托
+                        if curr_price >= cost_price * p.atr_threshold:
+                            atr_upper = sma + atr * (p.atr_max_h_ratio - held_day * p.atr_max_drop)
+                            if curr_price >= atr_upper:
+                                # 高位 ATR止盈卖出
+                                logging.warning(f'HATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                                f'HATR止盈线:{atr_upper}')
+                                order_sell(code, curr_price, sell_volume, 'HATR止盈委托', log=False)
+                        else:
+                            atr_upper = sma + atr * (p.atr_max_l_ratio - held_day * p.atr_max_drop)
+                            if curr_price >= atr_upper:
+                                # 低位 ATR止盈卖出
+                                logging.warning(f'LATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                                f'LATR止盈线:{atr_upper}')
+                                order_sell(code, curr_price, sell_volume, 'LATR止盈委托', log=False)
+
                 else:
                     if curr_price <= switch_lower:
                         # 默认绝对止损卖出
                         order_sell(code, curr_price, sell_volume, 'DEF止损委托')
-                    elif curr_price >= cost_price * p.upper_income:
+                    elif curr_price >= cost_price * p.max_income:
                         # 默认绝对止盈卖出
                         order_sell(code, curr_price, sell_volume, 'DEF止盈委托')
 
