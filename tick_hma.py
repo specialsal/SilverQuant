@@ -231,29 +231,35 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     curr_open = quote['open']
     last_close = quote['lastClose']
 
+    info = {}
+
     if not curr_close > p.min_price:
-        return False, {}
+        return False, info
 
     if not curr_open < curr_close < last_close * p.inc_limit:
-        return False, {}
+        return False, info
 
     # sma = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
+    # info.update({'sma': sma})
     # if not (sma < last_close):
-    #     return False, {}
+    #     return False, info
 
     hma60 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
+    info.update({'hma60': hma60})
     if not (curr_open < hma60 < curr_close):
-        return False, {}
+        return False, info
 
     hma40 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.M)
+    info.update({'hma40': hma40})
     if not (curr_open < hma40 < curr_close):
-        return False, {}
+        return False, info
 
     hma20 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.L)
+    info.update({'hma20': hma20})
     if not (curr_open < hma20 < curr_close):
-        return False, {}
+        return False, info
 
-    return True, {}
+    return True, info
 
 
 def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
@@ -322,11 +328,11 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
             cache_select[curr_date].add(selection['code'])
             logging.warning(
                 f"记录选股 {selection['code']}"
-                f"\t现价: {selection['price']:.2f}"
-                # f"\tHMA_20: {selection['hma20']:.2f}"
-                # f"\tHMA_40: {selection['hma40']:.2f}"
-                # f"\tHMA_60: {selection['hma60']:.2f}"
-                # f"\tSMA: {selection['sma']:.2f}"
+                f"\t价: {selection['price']:.2f}"
+                + f"\tHMA_20: {selection['hma20']:.2f}" if 'hma20' in selection.keys() else ""
+                                                                                            + f"\tHMA_40: {selection['hma40']:.2f}" if 'hma40' in selection.keys() else ""
+                                                                                                                                                                        + f"\tHMA_60: {selection['hma60']:.2f}" if 'hma60' in selection.keys() else ""
+                                                                                                                                                                                                                                                    + f"\tSMA: {selection['sma']:.2f}" if 'sma' in selection.keys() else ""
             )
 
 
