@@ -14,14 +14,17 @@ def run():
     df = df[['股票代码', '股票简称', '最新价']]
     df = df[~df['股票代码'].isin(cache)]
     cache.update(list(df['股票代码']))
-    return str(df)
+    if df.shape[0] > 0:
+        return df
+    return None
 
 
 def job():
     now = datetime.datetime.now().strftime("%H:%M")
     if ("09:30" <= now <= "11:30") or ("13:00" <= now <= "14:57"):
         result = run()
-        sample_send_msg(f'{now}\n{result}', 0, now)
+        if result is not None:
+            sample_send_msg(f'{now}\n{result}', 0, now)
     elif now == '15:00':
         cache.clear()
 
@@ -39,5 +42,5 @@ def test():
 
 
 if __name__ == '__main__':
-    # test()
-    start_schedule()
+    test()
+    # start_schedule()
