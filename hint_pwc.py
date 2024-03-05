@@ -22,6 +22,8 @@ def job():
     if ("09:30" <= now <= "11:30") or ("13:00" <= now <= "14:57"):
         result = run()
         sample_send_msg(f'{now}\n{result}', 0, now)
+    elif now == '15:00':
+        cache.clear()
 
 
 def start_schedule():
