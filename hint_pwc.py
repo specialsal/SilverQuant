@@ -21,10 +21,14 @@ def run():
 
 def job():
     now = datetime.datetime.now().strftime("%H:%M")
-    if ("09:30" <= now <= "11:30") or ("13:00" <= now <= "14:57"):
+    if ("09:30" <= now < "11:30") or ("13:00" <= now < "14:57"):
+        print(f'[{now}]', end='')
         result = run()
         if result is not None:
-            sample_send_msg(f'{now}\n{result}', 0, now)
+            sample_send_msg(f'{now}\n{result}', 0, 'Message send successful!')
+            print(result)
+        else:
+            print(None)
     elif now == '15:00':
         cache.clear()
 
@@ -42,5 +46,5 @@ def test():
 
 
 if __name__ == '__main__':
-    test()
-    # start_schedule()
+    # test()
+    start_schedule()
