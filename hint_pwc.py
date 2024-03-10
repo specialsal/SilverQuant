@@ -24,7 +24,7 @@ def job():
     now = datetime.datetime.now()
     now_day = now.strftime("%Y-%m-%d")
     now_min = now.strftime("%H:%M")
-    logging.basicConfig(filename=f'_data/{now_day}')
+    logging.basicConfig(filename=f'_data/{now_day}-{query}.log')
 
     if ("09:30" <= now_min < "11:30") or ("13:00" <= now_min < "14:57"):
         print(f'[{now_min}]', end='')
