@@ -1,3 +1,4 @@
+import logging
 import schedule
 import datetime
 import pywencai
@@ -5,12 +6,13 @@ import pywencai
 from tools.utils_ding import sample_send_msg
 
 
-query = '向上突破2日均线，主板，涨幅大于4%，非ST'
+query = '向上突破20日均线，主板，涨幅大于4%，非ST，量比大于1.47，委比大于0'
 cache = set()
 
 
 def run():
     df = pywencai.get(query=query)
+    print(df)
     df = df[['股票代码', '股票简称', '最新价']]
     df = df[~df['股票代码'].isin(cache)]
     cache.update(list(df['股票代码']))
@@ -20,16 +22,21 @@ def run():
 
 
 def job():
-    now = datetime.datetime.now().strftime("%H:%M")
-    if ("09:30" <= now < "11:30") or ("13:00" <= now < "14:57"):
-        print(f'[{now}]', end='')
+    now = datetime.datetime.now()
+    now_day = now.strftime("%Y-%m-%d")
+    now_min = now.strftime("%H:%M")
+    logging.basicConfig(filename=f'_data/{now_day}')
+
+    if ("09:30" <= now_min < "11:30") or ("13:00" <= now_min < "14:57"):
+        print(f'[{now_min}]', end='')
         result = run()
         if result is not None:
-            sample_send_msg(f'{now}\n{result}', 0, 'Message send successful!')
+            sample_send_msg(f'{now_min}\n{result}', 0, 'Message send successful!')
             print(result)
+            logging.warning(f'{now_min}\n{result}', )
         else:
             print(None)
-    elif now == '15:00':
+    elif now_min == '09:15':
         cache.clear()
 
 
@@ -40,8 +47,8 @@ def start_schedule():
 
 
 def test():
-    print(run())
-    print('====')
+    from tools.utils_basic import pd_show_all
+    pd_show_all()
     print(run())
 
 
