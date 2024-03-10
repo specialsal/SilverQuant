@@ -12,7 +12,6 @@ cache = set()
 
 def run():
     df = pywencai.get(query=query)
-    print(df)
     df = df[['股票代码', '股票简称', '最新价']]
     df = df[~df['股票代码'].isin(cache)]
     cache.update(list(df['股票代码']))
