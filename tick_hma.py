@@ -72,7 +72,7 @@ class p:
     # 绝对止盈止损
     switch_max_rise = 0.02  # 换仓上限乘数
     max_income = 1.45       # 止盈率（ATR失效时使用）
-    min_income = 0.97       # 止损率（ATR失效时使用）
+    min_income = 0.985      # 止损率（ATR失效时使用）
     min_rise = 0.005        # 换仓下限乘数
     # 动态止盈止损
     atr_threshold = 1.05    # 高低涨幅确定atr止盈的分界
@@ -249,10 +249,10 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     # if not (sma < last_close):
     #     return False, info
 
-    hma60 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
-    info.update({'hma60': hma60})
-    if not (curr_open < hma60 < curr_close):
-        return False, info
+    # hma60 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
+    # info.update({'hma60': hma60})
+    # if not (curr_open < hma60 < curr_close):
+    #     return False, info
 
     hma40 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.M)
     info.update({'hma40': hma40})
@@ -466,13 +466,14 @@ def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
     if '09:30' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
-        if '09:32' <= curr_time:
+        if '11:25' <= curr_time:
             scan_buy(quotes, curr_date, positions)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
+        scan_buy(quotes, curr_date, positions)
 
 
 def callback_sub_whole(quotes: Dict) -> None:
