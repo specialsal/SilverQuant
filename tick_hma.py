@@ -462,44 +462,43 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 
 
 def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
+    positions = xt_delegate.check_positions()
+    scan_sell(quotes, curr_time, positions)
+
     # 早盘
-    if '09:30' <= curr_time <= '11:30':
-        positions = xt_delegate.check_positions()
-        scan_sell(quotes, curr_time, positions)
-        if '11:25' <= curr_time:
-            scan_buy(quotes, curr_date, positions)
+    if '11:25' <= curr_time:
+        scan_buy(quotes, curr_date, positions)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
-        positions = xt_delegate.check_positions()
-        scan_sell(quotes, curr_time, positions)
         scan_buy(quotes, curr_date, positions)
 
 
 def callback_sub_whole(quotes: Dict) -> None:
     now = datetime.datetime.now()
 
-    # 每分钟输出一行开头
     curr_time = now.strftime('%H:%M')
-    if cache_limits['prev_minutes'] != curr_time:
-        cache_limits['prev_minutes'] = curr_time
-        print(f'\n[{curr_time}]', end='')
+    if '09:30' <= curr_time <= '11:30' or '13:00' <= curr_time <= '14:56':
+        # 每分钟输出一行开头
+        if cache_limits['prev_minutes'] != curr_time:
+            cache_limits['prev_minutes'] = curr_time
+            print(f'\n[{curr_time}]', end='')
 
-    # 每秒钟开始的时候输出一个点
-    with lock_quotes_update:
-        curr_seconds = now.strftime('%H:%M:%S')
-        cache_quotes.update(quotes)
-        if cache_limits['prev_seconds'] != curr_seconds:
-            cache_limits['prev_seconds'] = curr_seconds
-            curr_date = now.strftime('%Y-%m-%d')
+        # 每秒钟开始的时候输出一个点
+        with lock_quotes_update:
+            curr_seconds = now.strftime('%H:%M:%S')
+            cache_quotes.update(quotes)
+            if cache_limits['prev_seconds'] != curr_seconds:
+                cache_limits['prev_seconds'] = curr_seconds
+                curr_date = now.strftime('%Y-%m-%d')
 
-            # 只有在交易日才执行策略
-            if check_today_is_open_day(curr_date):
-                print(map_num_to_chr(len(cache_quotes)), end='')
-                execute_strategy(curr_date, curr_time, cache_quotes)
-                cache_quotes.clear()
-            else:
-                print('_', end='')
+                # 只有在交易日才执行策略
+                if check_today_is_open_day(curr_date):
+                    print(map_num_to_chr(len(cache_quotes)), end='')
+                    execute_strategy(curr_date, curr_time, cache_quotes)
+                    cache_quotes.clear()
+                else:
+                    print('_', end='')
 
 
 def subscribe_tick():
