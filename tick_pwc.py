@@ -27,7 +27,7 @@ from tools.utils_xtdata import get_prev_trading_date
 from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
 
 # ======== 配置 ========
-STRATEGY_NAME = '冬白一号'
+STRATEGY_NAME = '问财策略'
 QMT_ACCOUNT_ID = tick_accounts.DB_QMT_ACCOUNT_ID
 QMT_CLIENT_PATH = tick_accounts.DB_QMT_CLIENT_PATH
 
@@ -57,7 +57,8 @@ target_stock_prefixes = {  # set
     # '688', '689',  # 科创板
 }
 
-query = '上一周增持；非ST；主板；昨日流通市值从小到大排序'
+# query = '上一周增持；非ST；主板；昨日流通市值从小到大排序'
+query = '向上突破20日均线，主板，涨幅大于4%，非ST，量比大于1.47，委比大于0'
 
 
 class p:
@@ -94,13 +95,13 @@ class MyCallback(XtBaseCallback):
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'B')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '+')
             new_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'S')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '-')
             del_held(lock_held_op_cache, PATH_HELD, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
@@ -206,10 +207,14 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
 
 
 def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
+
     selections = []
 
     df = pywencai.get(query=query)
-    wencai_selected = list(df['股票代码'].values)
+    wencai_selected = []
+    if df.shape[0] > 0:
+        wencai_selected = df['股票代码'].to_list()
+        print(wencai_selected)
 
     for code in quotes:
         if code[:3] not in target_stock_prefixes:
@@ -362,13 +367,11 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 # ======== 框架 ========
 
 
-def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
+def execute_sell_strategy(curr_date: str, curr_time: str, quotes: Dict):
     # 早盘
     if '09:31' <= curr_time <= '11:30':
         positions = xt_delegate.check_positions()
         scan_sell(quotes, curr_time, positions)
-        if '09:32' == curr_time:
-            scan_buy(quotes, curr_date, positions)
 
     # 午盘
     elif '13:00' <= curr_time <= '14:56':
@@ -376,14 +379,22 @@ def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
         scan_sell(quotes, curr_time, positions)
 
 
+def execute_buy_strategy(curr_date: str, curr_time: str, quotes: Dict):
+    positions = xt_delegate.check_positions()
+    scan_buy(quotes, curr_date, positions)
+
+
 def callback_sub_whole(quotes: Dict) -> None:
     now = datetime.datetime.now()
 
     # 每分钟输出一行开头
+    curr_date = now.strftime('%Y-%m-%d')
     curr_time = now.strftime('%H:%M')
     if cache_limits['prev_minutes'] != curr_time:
         cache_limits['prev_minutes'] = curr_time
         print(f'\n[{curr_time}]', end='')
+        if check_today_is_open_day(curr_date):
+            execute_buy_strategy(curr_date, curr_time, cache_quotes)
 
     # 每秒钟开始的时候输出一个点
     with lock_quotes_update:
@@ -391,15 +402,14 @@ def callback_sub_whole(quotes: Dict) -> None:
         cache_quotes.update(quotes)
         if cache_limits['prev_seconds'] != curr_seconds:
             cache_limits['prev_seconds'] = curr_seconds
-            curr_date = now.strftime('%Y-%m-%d')
 
             # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
                 print('.' if len(cache_quotes) > 0 else 'x', end='')
-                execute_strategy(curr_date, curr_time, cache_quotes)
+                execute_sell_strategy(curr_date, curr_time, cache_quotes)
                 cache_quotes.clear()
             else:
-                print('-', end='')
+                print('_', end='')
 
 
 def subscribe_tick():
