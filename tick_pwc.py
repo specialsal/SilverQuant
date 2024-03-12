@@ -58,7 +58,7 @@ target_stock_prefixes = {  # set
 }
 
 # query = '上一周增持；非ST；主板；昨日流通市值从小到大排序'
-query = '向上突破20日均线，主板，涨幅大于4%，非ST，量比大于1.47，委比大于0'
+query = '向上突破20日均线，主板，涨幅大于4%，非ST，量比大于1.47，委比大于0.01'
 
 
 class p:
@@ -212,7 +212,7 @@ def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
 
     df = pywencai.get(query=query)
     wencai_selected = []
-    if df.shape[0] > 0:
+    if df is not None and df.shape[0] > 0:
         wencai_selected = df['股票代码'].to_list()
         print(wencai_selected)
 

@@ -6,7 +6,7 @@ import pywencai
 from tools.utils_ding import sample_send_msg
 
 
-query = '向上突破20日均线，主板，涨幅大于4%，非ST，量比大于1.47，委比大于0'
+query = '向上突破20日均线，主板，涨幅大于4%，非ST，量比大于1.47，委比大于0.01'
 cache = set()
 
 
@@ -15,7 +15,7 @@ def run():
     df = df[['股票代码', '股票简称', '最新价']]
     df = df[~df['股票代码'].isin(cache)]
     cache.update(list(df['股票代码']))
-    if df.shape[0] > 0:
+    if df is not None and df.shape[0] > 0:
         return df
     return None
 
