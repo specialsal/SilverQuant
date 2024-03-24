@@ -3,7 +3,7 @@ import json
 import pickle
 import datetime
 import threading
-from typing import List, Dict, Callable, Optional
+from typing import List, Dict, Set, Callable, Optional
 
 import numpy as np
 import pandas as pd
@@ -270,13 +270,13 @@ def get_blacklist_codes(target_stock_prefixes: set = None) -> list:
     return [symbol_to_code(symbol) for symbol in history_symbols if symbol[:3] in target_stock_prefixes]
 
 
-def get_market_value_top_codes(market_value_top: int):
+def get_whitelist_codes(code_prefixes: Set[str], min_value: int, max_value: int):
     # samples()
     df = ak.stock_zh_a_spot_em()
     df = df.sort_values('代码')
     df = df[['代码', '名称', '总市值', '流通市值']]
-    df = df[df['总市值'] < market_value_top]
-    df = df[df['代码'].str.startswith(('00', '60'))]
+    df = df[(min_value < df['总市值']) & (df['总市值'] < max_value)]
+    df = df[df['代码'].str.startswith(tuple(code_prefixes))]
     return [symbol_to_code(symbol) for symbol in list(df['代码'].values)]
 
 
@@ -286,7 +286,7 @@ def get_all_historical_symbols() -> list:
     return symbols
 
 
-def get_all_historical_codes(target_stock_prefixes: set = None) -> list:
+def get_all_historical_codes(target_stock_prefixes: Set[str] = None) -> list:
     history_symbols = get_all_historical_symbols()
     if target_stock_prefixes is None:
         return [symbol_to_code(symbol) for symbol in history_symbols]
@@ -369,5 +369,12 @@ if __name__ == '__main__':
     # print(get_index_element(INDEX_SH_50))
     # print(get_blacklist_codes({'000', '001', '002', '003'}))
 
-    print(get_market_value_top_codes(3000000000))
-    print(get_blacklist_codes())
+    temp = get_whitelist_codes({  # set
+        '000', '001', '002', '003',
+        # '300', '301',  # 创业板
+        '600', '601', '603', '605',
+        # '688', '689',  # 科创板
+    }, 30 * 10000 * 10000, 600 * 10000 * 10000)
+    print(len(temp))
+
+    # print(get_blacklist_codes())

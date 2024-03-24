@@ -21,7 +21,7 @@ import tick_accounts
 from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init
 from tools.utils_cache import load_json, save_json, get_all_historical_codes, \
-    get_blacklist_codes, \
+    get_blacklist_codes, get_whitelist_codes, \
     check_today_is_open_day, load_pickle, save_pickle, \
     all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
@@ -41,10 +41,14 @@ PATH_DATE = PATH_BASE + '/curr_date.json'   # 用来标记每天一次的缓存
 PATH_LOGS = PATH_BASE + '/logs.txt'         # 用来存储选股和委托操作
 PATH_INFO = PATH_BASE + '/info-{}.pkl'      # 用来缓存当天的指标信息
 
+lock_wencai_select = threading.Lock()       # 问财选股内容缓存德索
 lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
 lock_of_disk_cache = threading.Lock()       # 操作持仓数据缓存的锁
 
 cache_blacklist: Set[str] = set()           # 记录黑名单中的股票
+cache_whitelist: Set[str] = set()           # 记录白名单中的股票
+
+# cache_wencai: Dict[str, float] = {}         # 记录问财的选股信息
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
 cache_select: Dict[str, Set] = {}           # 记录选股历史，去重
 cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
@@ -52,6 +56,7 @@ cache_limits: Dict[str, str] = {    # 限制执行次数的缓存集合
     'prev_seconds': '',             # 限制每秒一次跑策略扫描的缓存
     'prev_minutes': '',             # 限制每分钟屏幕心跳换行的缓存
 }
+
 
 # ======== 策略 ========
 target_stock_prefixes = {  # set
@@ -61,8 +66,23 @@ target_stock_prefixes = {  # set
     # '688', '689',  # 科创板
 }
 
-# query = '上一周增持；非ST；主板；昨日流通市值从小到大排序'
-query = '向上突破20日均线，主板，涨幅大于4%，非ST，量比大于1.47，委比大于0.01'
+query = '，'.join([
+    '主板',
+    '非ST',
+    '非银行',
+    '非证券',
+    '非交通',
+    '非地产',
+    '非基建',
+    # '涨幅大于1%',
+    '向上突破20日均线',
+    '向上突破30日均线',
+    '量比大于1.47',
+    '委比大于0.06',
+    '市值大于30亿',
+    '市值小于600亿',
+    '昨日流通市值从小到大排序',
+])
 
 
 class p:
@@ -76,7 +96,7 @@ class p:
     # 卖点：绝对止盈止损
     switch_max_rise = 0.02  # 换仓上限乘数
     max_income = 1.45       # 止盈率（ATR失效时使用）
-    min_income = 0.985      # 止损率（ATR失效时使用）
+    min_income = 0.975      # 止损率（ATR失效时使用）
     min_rise = 0.005        # 换仓下限乘数
     # 卖点：动态止盈止损
     atr_threshold = 1.05    # 高低涨幅确定atr止盈的分界
@@ -90,9 +110,12 @@ class p:
     fall_trigger = 1.03     # 回落止盈的涨幅触发阈值
     fall_limit = 0.02       # 回落止盈的倍数
     # 买点：策略参数
-    interval = 5            # 请求问财的时间间隔（秒）
-    inc_limit = 1.06        # 相对于昨日收盘的涨幅限制
+    buy_interval = 15       # 问财买点的时间间隔（秒）
+    clean_interval = 30     # 清除缓存的时间间隔（秒）
+    inc_limit = 1.07        # 相对于昨日收盘的涨幅限制
     min_price = 2.00        # 限制最低可买入股票的现价
+    market_value_min = 30 * 10000 * 10000   # 市值下限
+    market_value_max = 600 * 10000 * 10000  # 市值上限
     # 历史指标
     day_count = 5           # 3天atr和sma，5天够用
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
@@ -103,13 +126,13 @@ class MyCallback(XtBaseCallback):
         if trade.order_type == xtconstant.STOCK_BUY:
             log = f'买入成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '+')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'B')
             new_held(lock_of_disk_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
             log = f'卖出成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
             logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '-')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, 'S')
             del_held(lock_of_disk_cache, PATH_HELD, [trade.stock_code])
 
     # def on_stock_order(self, order: XtOrder):
@@ -136,11 +159,16 @@ def held_increase() -> None:
     print(f'All held stock day +1!')
 
 
-def refresh_blacklist():
+def refresh_code_list():
     cache_blacklist.clear()
     black_codes = get_blacklist_codes(target_stock_prefixes)
     cache_blacklist.update(black_codes)
-    print(f'Blacklist refreshed: {black_codes}')
+    print(f'Black list refreshed {len(cache_blacklist)} codes.')
+
+    cache_whitelist.clear()
+    white_codes = get_whitelist_codes(target_stock_prefixes, p.market_value_min, p.market_value_max)
+    cache_whitelist.update(white_codes)
+    print(f'White list refreshed {len(cache_whitelist)} codes.')
 
 
 def calculate_indicators(data: Union[Dict, pd.DataFrame]) -> Optional[Dict]:
@@ -210,41 +238,57 @@ def prepare_indicators() -> None:
 # ======== 买点 ========
 
 
-def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
+def wencai_select() -> dict:
+    now = datetime.datetime.now()
+    now_day = now.strftime("%Y-%m-%d")
+    now_min = now.strftime("%H:%M")
+    if check_today_is_open_day(now_day):
+        if ("09:31" <= now_min < "11:30") or ("13:00" <= now_min < "14:57"):
+            print('!', end='')
+            df = pywencai.get(query=query)
+
+            if df is not None and type(df) != dict and df.shape[0] > 0:
+                with lock_wencai_select:
+                    df['最新价'] = df['最新价'].astype(float)
+                    print(f'Wencai: {now.strftime("%H:%M:%S")}\n', df[['股票代码', '股票简称', '最新价']])
+                    return df.set_index('股票代码')['最新价'].to_dict()
+    return {}
+
+
+def check_stock(code: str, quote: Dict, indicator: Dict) -> (bool, Dict):
     curr_close = quote['lastPrice']
     curr_open = quote['open']
     last_close = quote['lastClose']
 
-    info = {}
+    if code in cache_blacklist:
+        return False, {'reason': f'在黑名单'}
+
+    if code not in cache_whitelist:
+        return False, {'reason': f'不在白名单'}
 
     if not curr_close > p.min_price:
-        return False, info
+        return False, {'reason': f'价格小于{p.min_price}'}
 
     if not curr_open < curr_close < last_close * p.inc_limit:
-        return False, info
+        return False, {'reason': f'涨幅不符合区间 {curr_open} < {curr_close} < {last_close * p.inc_limit}'}
 
     return True, {}
 
 
 def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
+    codes_wencai = wencai_select()
+
     selections = []
-
-    wencai_selected = []
-    df = pywencai.get(query=query)
-    if df is not None and type(df) != dict and df.shape[0] > 0:
-        wencai_selected = df['股票代码'].to_list()
-        # print(wencai_selected)
-
-    for code in quotes:
-        if code[:3] not in target_stock_prefixes:
-            continue
-
-        if code not in cache_indicators:
-            continue
-
-        if code not in cache_blacklist and code in wencai_selected:    # 如果不在黑名单
-            passed, info = decide_stock(quotes[code], cache_indicators[code])
-            if passed:
+    for code in codes_wencai:
+        if code not in quotes:
+            print(f'{code} 没有quote数据')
+        elif code not in cache_indicators:
+            print(f'{code} 没有indicator数据')
+        else:
+            passed, info = check_stock(code, quotes[code], cache_indicators[code])
+            if not passed:
+                print(f'{code} {info}')
+            else:
                 selection = {'code': code, 'price': quotes[code]['lastPrice']}
                 selection.update(info)
                 selections.append(selection)
@@ -253,10 +297,10 @@ def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
 
 def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
     selections = select_stocks(quotes)
-    print(selections)
 
     # 选出一个以上的股票
     if len(selections) > 0:
+        print('Selected: ', selections)
         # selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
 
         position_codes = [position.stock_code for position in positions]
@@ -270,18 +314,18 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
         buy_count = int(buy_count)
 
         for i in range(len(selections)):  # 依次买入
-            logging.debug(f'买数相关：持仓{position_count} 现金{available_cash} 已选{len(selections)}')
+            logging.info(f'买数相关：持仓{position_count} 现金{available_cash} 已选{len(selections)}')
             if buy_count > 0:
                 code = selections[i]['code']
                 price = selections[i]['price']
                 buy_volume = math.floor(p.amount_each / price / 100) * 100
 
                 if buy_volume <= 0:
-                    logging.debug(f'{code} 价格过高')
+                    print(f'{code} 价格过高')
                 elif code in position_codes:
-                    logging.debug(f'{code} 正在持仓')
+                    print(f'{code} 正在持仓')
                 elif curr_date in cache_select and code in cache_select[curr_date]:
-                    logging.debug(f'{code} 今日已选')
+                    print(f'{code} 今日已选')
                 else:
                     buy_count = buy_count - 1
                     # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
@@ -301,6 +345,10 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
             logging.warning(
                 f"记录选股 {selection['code']}"
                 f"\t现价: {selection['price']:.2f}")
+
+
+def async_scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]):
+    threading.Thread(target=scan_buy, args=(quotes, curr_date, positions)).start()  # 异步买点
 
 
 # ======== 卖点 ========
@@ -421,23 +469,6 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 # ======== 框架 ========
 
 
-def execute_sell_strategy(curr_date: str, curr_time: str, quotes: Dict):
-    # 早盘
-    if '09:31' <= curr_time <= '11:30':
-        positions = xt_delegate.check_positions()
-        scan_sell(quotes, curr_time, positions)
-
-    # 午盘
-    elif '13:00' <= curr_time <= '14:56':
-        positions = xt_delegate.check_positions()
-        scan_sell(quotes, curr_time, positions)
-
-
-def execute_buy_strategy(curr_date: str, curr_time: str, quotes: Dict):
-    positions = xt_delegate.check_positions()
-    scan_buy(quotes, curr_date, positions)
-
-
 def callback_sub_whole(quotes: Dict) -> None:
     now = datetime.datetime.now()
 
@@ -458,11 +489,17 @@ def callback_sub_whole(quotes: Dict) -> None:
             # 只有在交易日才执行策略
             if check_today_is_open_day(curr_date):
                 print('.' if len(cache_quotes) > 0 else 'x', end='')
-                execute_sell_strategy(curr_date, curr_time, cache_quotes)
-                if int(curr_seconds) % p.interval == 0:
-                    execute_buy_strategy(curr_date, curr_time, cache_quotes)
-                    print('+', end='')
-                    cache_quotes.clear()
+
+                # 根据时间段执行买卖
+                positions = xt_delegate.check_positions()
+                if '09:31' <= curr_time <= '11:30' or '13:00' <= curr_time <= '14:56':
+                    scan_sell(cache_quotes, curr_time, positions)
+                if '10:00' <= curr_time <= '11:30' or '13:00' <= curr_time <= '14:56':
+                    if int(curr_seconds) % p.buy_interval == 0:
+                        async_scan_buy(cache_quotes, curr_date, positions)
+
+                if int(curr_seconds) % p.clean_interval == 0:
+                    cache_quotes.clear()  # 防止过时的价格导致挂延时单
             else:
                 print('_', end='')
 
@@ -506,6 +543,7 @@ if __name__ == '__main__':
     temp_time = temp_now.strftime('%H:%M')
 
     if '09:15' < temp_time and check_today_is_open_day(temp_date):
+        refresh_code_list()
         prepare_indicators()
         # 重启如果在交易时间则订阅Tick
         if '09:30' <= temp_time <= '14:57':
@@ -515,10 +553,16 @@ if __name__ == '__main__':
     random_time = f'08:{str(math.floor(random() * 60)).zfill(2)}'
     schedule.every().day.at(random_time).do(random_check_open_day)
     schedule.every().day.at('09:10').do(held_increase)
-    schedule.every().day.at('09:11').do(refresh_blacklist)
+    schedule.every().day.at('09:11').do(refresh_code_list)
     schedule.every().day.at('09:15').do(prepare_indicators)
-    schedule.every().day.at('09:25').do(subscribe_tick)
+
+    schedule.every().day.at('09:30').do(subscribe_tick)
+    schedule.every().day.at('11:30').do(unsubscribe_tick)
+
+    schedule.every().day.at('13:00').do(subscribe_tick)
     schedule.every().day.at('15:00').do(unsubscribe_tick)
+
+    # schedule.every(p.interval).seconds.do(async_scan_buy)
 
     while True:
         schedule.run_pending()

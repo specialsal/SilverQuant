@@ -20,7 +20,7 @@ import tick_accounts
 from data_loader.reader_tushare import get_ts_markets
 from tools.utils_basic import logging_init, map_num_to_chr
 from tools.utils_cache import load_json, save_json, get_all_historical_codes, \
-    get_blacklist_codes, get_market_value_top_codes, \
+    get_blacklist_codes, get_whitelist_codes, \
     check_today_is_open_day, load_pickle, save_pickle, \
     all_held_inc, new_held, del_held
 from tools.utils_ding import sample_send_msg
@@ -44,6 +44,8 @@ lock_quotes_update = threading.Lock()       # 聚合实时打点缓存的锁
 lock_of_disk_cache = threading.Lock()       # 操作持仓数据缓存的锁
 
 cache_blacklist: Set[str] = set()           # 记录黑名单中的股票
+cache_whitelist: Set[str] = set()           # 记录白名单中的股票
+
 cache_quotes: Dict[str, Dict] = {}          # 记录实时的价格信息
 cache_select: Dict[str, Set] = {}           # 记录选股历史，去重
 cache_indicators: Dict[str, Dict] = {}      # 记录技术指标相关值 { code: { indicator_name: ...} }
@@ -72,13 +74,13 @@ class p:
     # 绝对止盈止损
     switch_max_rise = 0.02  # 换仓上限乘数
     max_income = 1.45       # 止盈率（ATR失效时使用）
-    min_income = 0.985      # 止损率（ATR失效时使用）
-    min_rise = 0.005        # 换仓下限乘数
+    min_income = 0.979      # 止损率（ATR失效时使用）
+    min_rise = 0.002        # 换仓下限乘数
     # 动态止盈止损
     atr_threshold = 1.05    # 高低涨幅确定atr止盈的分界
     atr_time_period = 3     # 计算atr的天数
-    atr_max_h_ratio = 1.36  # 高位止盈atr的乘数
-    atr_max_l_ratio = 1.03  # 低位止盈atr的乘数
+    atr_max_h_ratio = 1.36  # 高位止盈atr的系数
+    atr_max_l_ratio = 1.03  # 低位止盈atr的系数
     atr_max_drop = 0.01     # 止盈atr的每日递减
     atr_min_ratio = 0.85    # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数，用来计算atr的中间变量
@@ -87,11 +89,13 @@ class p:
     fall_limit = 0.02       # 回落止盈的倍数
     # 策略参数
     L = 20                  # 选股HMA短周期
-    M = 40                  # 选股HMA中周期
+    M = 30                  # 选股HMA中周期
     N = 60                  # 选股HMA长周期
     S = 5                   # 选股SMA周期
     inc_limit = 1.02        # 相对于昨日收盘的涨幅限制
     min_price = 2.00        # 限制最低可买入股票的现价
+    market_value_min = 30 * 10000 * 10000   # 市值下限
+    market_value_max = 600 * 10000 * 10000  # 市值上限
     # 历史指标
     day_count = 69          # 70个足够算出周期为60的 HMA
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
@@ -135,16 +139,17 @@ def held_increase() -> None:
     print(f'All held stock day +1.')
 
 
-def refresh_blacklist():
+def refresh_code_list():
     cache_blacklist.clear()
-
     black_codes = get_blacklist_codes(target_stock_prefixes)
     cache_blacklist.update(black_codes)
+    print(f'Black list refreshed {len(cache_blacklist)} codes.')
 
-    limit_codes = get_market_value_top_codes(3000000000)
-    cache_blacklist.update(limit_codes)
+    cache_whitelist.clear()
+    white_codes = get_whitelist_codes(target_stock_prefixes, p.market_value_min, p.market_value_max)
+    cache_whitelist.update(white_codes)
+    print(f'White list refreshed {len(cache_whitelist)} codes.')
 
-    print(f'Blacklist refreshed.')
 
 
 def calculate_indicators(data: Union[Dict, pd.DataFrame]) -> Optional[Dict]:
@@ -244,24 +249,24 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     if not curr_open < curr_close < last_close * p.inc_limit:
         return False, info
 
-    # sma = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
-    # info.update({'sma': sma})
-    # if not (sma < last_close):
-    #     return False, info
+    sma = get_last_sma(np.append(indicator['PAST_69'], [curr_close]), p.S)
+    info.update({'sma': sma})
+    if not (sma < last_close):
+        return False, info
 
     # hma60 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
     # info.update({'hma60': hma60})
     # if not (curr_open < hma60 < curr_close):
     #     return False, info
 
-    hma40 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.M)
-    info.update({'hma40': hma40})
-    if not (curr_open < hma40 < curr_close):
+    hmaB = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.M)
+    info.update({'hma40': hmaB})
+    if not (curr_open < hmaB < curr_close):
         return False, info
 
-    hma20 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.L)
-    info.update({'hma20': hma20})
-    if not (curr_open < hma20 < curr_close):
+    hmaA = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.L)
+    info.update({'hma20': hmaA})
+    if not (curr_open < hmaA < curr_close):
         return False, info
 
     return True, info
@@ -270,10 +275,12 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
 def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
     selections = []
     for code in quotes:
-        if code[:3] not in target_stock_prefixes:
+        if code not in cache_indicators:
+            # print('\n', code, ' in blacklist')
             continue
 
-        if code not in cache_indicators:
+        if code not in cache_whitelist:
+            # print('\n', code, ' not in whitelist')
             continue
 
         if code not in cache_blacklist:    # 如果不在黑名单
@@ -335,9 +342,9 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
                 f"记录选股 {selection['code']}"
                 f"\t价: {selection['price']:.2f}"
                 + f"\tHMA_20: {selection['hma20']:.2f}" if 'hma20' in selection.keys() else ""
-                                                                                            + f"\tHMA_40: {selection['hma40']:.2f}" if 'hma40' in selection.keys() else ""
-                                                                                                                                                                        + f"\tHMA_60: {selection['hma60']:.2f}" if 'hma60' in selection.keys() else ""
-                                                                                                                                                                                                                                                    + f"\tSMA: {selection['sma']:.2f}" if 'sma' in selection.keys() else ""
+                + f"\tHMA_40: {selection['hma40']:.2f}" if 'hma40' in selection.keys() else ""
+                + f"\tHMA_60: {selection['hma60']:.2f}" if 'hma60' in selection.keys() else ""
+                + f"\tSMA: {selection['sma']:.2f}" if 'sma' in selection.keys() else ""
             )
 
 
@@ -374,7 +381,6 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
                 curr_price = quote['lastPrice']
                 max_prices[code] = max(max_prices[code], curr_price) if code in max_prices else curr_price
         save_json(PATH_MAXP, max_prices)
-
 
     for position in positions:
         code = position.stock_code
@@ -445,7 +451,6 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
                                             f'LATR止盈线:{atr_upper}')
                             order_sell(code, curr_price, sell_volume, 'LATR止盈委托', log=False)
                             continue
-
 
             # 绝对止盈止损卖出
             if held_day > 0:
@@ -540,6 +545,7 @@ if __name__ == '__main__':
     temp_time = temp_now.strftime('%H:%M')
 
     if '09:15' < temp_time and check_today_is_open_day(temp_date):
+        refresh_code_list()
         prepare_indicators()
         # 重启如果在交易时间则订阅Tick
         if '09:30' <= temp_time <= '14:57':
@@ -549,9 +555,13 @@ if __name__ == '__main__':
     random_time = f'08:{str(math.floor(random() * 60)).zfill(2)}'
     schedule.every().day.at(random_time).do(random_check_open_day)
     schedule.every().day.at('09:10').do(held_increase)
-    schedule.every().day.at('09:11').do(refresh_blacklist)
+    schedule.every().day.at('09:11').do(refresh_code_list)
     schedule.every().day.at('09:15').do(prepare_indicators)
-    schedule.every().day.at('09:25').do(subscribe_tick)
+
+    schedule.every().day.at('09:30').do(subscribe_tick)
+    schedule.every().day.at('11:30').do(unsubscribe_tick)
+
+    schedule.every().day.at('13:00').do(subscribe_tick)
     schedule.every().day.at('15:00').do(unsubscribe_tick)
 
     while True:
