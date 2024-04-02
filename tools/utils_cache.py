@@ -63,13 +63,13 @@ def save_json(path: str, var: dict) -> None:
 
 
 def daily_once(
-    lock: Optional[threading.Lock],   # None时不使用线程锁
-    memory_cache: Dict,     # 不能为None
-    file_cache_path: Optional[str],   # None时重启程序则失效
-    cache_key: str,
-    curr_date: str,
-    function: Callable,
-    *args,
+        lock: Optional[threading.Lock],   # None时不使用线程锁
+        memory_cache: Dict,     # 不能为None
+        file_cache_path: Optional[str],   # None时重启程序则失效
+        cache_key: str,
+        curr_date: str,
+        function: Callable,
+        *args,
 ) -> None:
     def _job():
         if cache_key in memory_cache:
@@ -126,13 +126,21 @@ def new_held(held_operation_lock: threading.Lock, path: str, codes: List[str]) -
         save_json(path, held_days)
 
 
-def del_held(held_operation_lock: threading.Lock, path: str, codes: List[str]) -> None:
-    with held_operation_lock:
-        held_days = load_json(path)
-        for code in codes:
-            if code in held_days:
-                del held_days[code]
-        save_json(path, held_days)
+def del_key(lock: threading.Lock, path: str, key: str) -> None:
+    with lock:
+        temp_json = load_json(path)
+        if key in temp_json:
+            del temp_json[key]
+        save_json(path, temp_json)
+
+
+def del_keys(lock: threading.Lock, path: str, keys: List[str]) -> None:
+    with lock:
+        temp_json = load_json(path)
+        for key in keys:
+            if key in temp_json:
+                del temp_json[key]
+        save_json(path, temp_json)
 
 
 def check_today_is_open_day_by_df(df: pd.DataFrame, today: str) -> bool:
@@ -369,12 +377,14 @@ if __name__ == '__main__':
     # print(get_index_element(INDEX_SH_50))
     # print(get_blacklist_codes({'000', '001', '002', '003'}))
 
-    temp = get_whitelist_codes({  # set
-        '000', '001', '002', '003',
-        # '300', '301',  # 创业板
-        '600', '601', '603', '605',
-        # '688', '689',  # 科创板
-    }, 30 * 10000 * 10000, 600 * 10000 * 10000)
-    print(len(temp))
+    # temp = get_whitelist_codes({  # set
+    #     '000', '001', '002', '003',
+    #     # '300', '301',  # 创业板
+    #     '600', '601', '603', '605',
+    #     # '688', '689',  # 科创板
+    # }, 30 * 10000 * 10000, 600 * 10000 * 10000)
+    # print(len(temp))
 
     # print(get_blacklist_codes())
+    max_prices = load_json('../_cache/prod_hma/max_price.json')
+    print(max_prices)

@@ -22,10 +22,11 @@ from tools.utils_basic import logging_init, map_num_to_chr
 from tools.utils_cache import load_json, save_json, get_all_historical_codes, \
     get_blacklist_codes, get_whitelist_codes, \
     check_today_is_open_day, load_pickle, save_pickle, \
-    all_held_inc, new_held, del_held
+    all_held_inc, new_held, del_key
 from tools.utils_ding import sample_send_msg
 from tools.utils_xtdata import get_prev_trading_date
-from tools.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
+from delegate.xt_delegate import XtDelegate, XtBaseCallback, get_holding_position_count, order_submit
+from trader.seller import Seller
 
 # ======== 配置 ========
 STRATEGY_NAME = '银狐二号'
@@ -103,17 +104,18 @@ class p:
 
 class MyCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
+        log = f'{trade.stock_code} v:{trade.traded_volume} p:{trade.traded_price:.2f}'
+
         if trade.order_type == xtconstant.STOCK_BUY:
-            log = f'买入成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
-            logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '[BUY]')
+            logging.warning(f'buy\t{log}')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - 买成 {log}', 0, '[BUY]')
             new_held(lock_of_disk_cache, PATH_HELD, [trade.stock_code])
 
         if trade.order_type == xtconstant.STOCK_SELL:
-            log = f'卖出成交 {trade.stock_code} 量{trade.traded_volume}\t价{trade.traded_price:.2f}'
-            logging.warning(log)
-            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - {log}', 0, '[SELL]')
-            del_held(lock_of_disk_cache, PATH_HELD, [trade.stock_code])
+            logging.warning(f'sell\t{log}')
+            sample_send_msg(f'[{QMT_ACCOUNT_ID}]{STRATEGY_NAME} - 卖成 {log}', 0, '[SELL]')
+            del_key(lock_of_disk_cache, PATH_HELD, trade.stock_code)
+            del_key(lock_of_disk_cache, PATH_MAXP, trade.stock_code)
 
     # def on_stock_order(self, order: XtOrder):
     #     log = f'委托回调 id:{order.order_id} code:{order.stock_code} remark:{order.order_remark}',
@@ -149,7 +151,6 @@ def refresh_code_list():
     white_codes = get_whitelist_codes(target_stock_prefixes, p.market_value_min, p.market_value_max)
     cache_whitelist.update(white_codes)
     print(f'White list refreshed {len(cache_whitelist)} codes.')
-
 
 
 def calculate_indicators(data: Union[Dict, pd.DataFrame]) -> Optional[Dict]:
@@ -254,19 +255,19 @@ def decide_stock(quote: Dict, indicator: Dict) -> (bool, Dict):
     if not (sma < last_close):
         return False, info
 
-    # hma60 = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
-    # info.update({'hma60': hma60})
-    # if not (curr_open < hma60 < curr_close):
-    #     return False, info
-
-    hmaB = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.M)
-    info.update({'hma40': hmaB})
-    if not (curr_open < hmaB < curr_close):
+    hma_l = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.L)
+    info.update({'hma20': hma_l})
+    if not (curr_open < hma_l < curr_close):
         return False, info
 
-    hmaA = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.L)
-    info.update({'hma20': hmaA})
-    if not (curr_open < hmaA < curr_close):
+    hma_m = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.M)
+    info.update({'hma40': hma_m})
+    if not (curr_open < hma_m < curr_close):
+        return False, info
+
+    hma_n = get_last_hma(np.append(indicator['PAST_69'], [curr_close]), p.N)
+    info.update({'hma60': hma_n})
+    if not (curr_open < hma_n < curr_close):
         return False, info
 
     return True, info
@@ -342,29 +343,13 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List[XtPosition]) -> None:
                 f"记录选股 {selection['code']}"
                 f"\t价: {selection['price']:.2f}"
                 + f"\tHMA_20: {selection['hma20']:.2f}" if 'hma20' in selection.keys() else ""
-                + f"\tHMA_40: {selection['hma40']:.2f}" if 'hma40' in selection.keys() else ""
-                + f"\tHMA_60: {selection['hma60']:.2f}" if 'hma60' in selection.keys() else ""
-                + f"\tSMA: {selection['sma']:.2f}" if 'sma' in selection.keys() else ""
+                                                                                            + f"\tHMA_40: {selection['hma40']:.2f}" if 'hma40' in selection.keys() else ""
+                                                                                                                                                                        + f"\tHMA_60: {selection['hma60']:.2f}" if 'hma60' in selection.keys() else ""
+                                                                                                                                                                                                                                                    + f"\tSMA: {selection['sma']:.2f}" if 'sma' in selection.keys() else ""
             )
 
 
 # ======== 卖点 ========
-
-
-def get_sma(row_close, period) -> float:
-    sma = ta.SMA(row_close, timeperiod=period)
-    return sma[-1]
-
-
-def get_atr(row_close, row_high, row_low, period) -> float:
-    atr = ta.ATR(row_high, row_low, row_close, timeperiod=period)
-    return atr[-1]
-
-
-def order_sell(code, price, volume, remark, log=True):
-    if log:
-        logging.warning(f'{remark} {code} {volume}股\t现价:{price:.3f}')
-    order_submit(xt_delegate, xtconstant.STOCK_SELL, code, price, volume, remark, p.order_premium, STRATEGY_NAME)
 
 
 def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None:
@@ -376,134 +361,58 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
         # 更新历史最高
         for position in positions:
             code = position.stock_code
-            if (code in quotes) and (code in held_days):
-                quote = quotes[code]
-                curr_price = quote['lastPrice']
-                max_prices[code] = max(max_prices[code], curr_price) if code in max_prices else curr_price
+            if code in held_days:
+                held_day = held_days[code]
+                if held_day == 0:
+                    continue
+                if code in quotes:
+                    quote = quotes[code]
+                    curr_price = quote['lastPrice']
+                    max_prices[code] = round(
+                        max(max_prices[code], curr_price) if code in max_prices else curr_price,
+                        3,
+                    )
         save_json(PATH_MAXP, max_prices)
 
-    for position in positions:
-        code = position.stock_code
-        cost_price = position.open_price
-        sell_volume = position.volume
-
-        # 如果有数据且有持仓时间记录
-        if (code in quotes) and (code in held_days):
-            held_day = held_days[code]
-
-            quote = quotes[code]
-            curr_price = quote['lastPrice']
-
-            # 换仓卖天
-            if held_day > 0:
-                switch_lower = cost_price * (p.min_income + held_day * p.min_rise)
-                switch_upper = cost_price * (1 + held_day * p.switch_max_rise)
-
-                # 未满足盈利目标的仓位 & 大于当日最早换仓时间
-                if held_day > p.hold_days and curr_time >= p.switch_begin:
-                    if switch_lower < curr_price < switch_upper:
-                        order_sell(code, curr_price, sell_volume, '换仓卖单')
-                        continue
-
-            # 回落止盈
-            if held_day > 0:
-                if code in max_prices:
-                    max_price = max_prices[code]
-                    # 历史最高大于触发阈值，且当前价格在最高点回落超过阈值
-                    if max_price > cost_price * p.fall_trigger and curr_price < max_price * (1 - p.fall_limit):
-                        order_sell(code, curr_price, sell_volume, '回落止盈')
-                        continue
-
-            # ATR止盈止损
-            if held_day > 0:
-                if code in cache_indicators:
-                    quote = quotes[code]
-                    close = np.append(cache_indicators[code]['CLOSE_3D'], quote['lastPrice'])
-                    high = np.append(cache_indicators[code]['HIGH_3D'], quote['high'])
-                    low = np.append(cache_indicators[code]['LOW_3D'], quote['low'])
-
-                    sma = get_sma(close, p.sma_time_period)
-                    atr = get_atr(close, high, low, p.atr_time_period)
-
-                    # ATR 止损委托
-                    atr_lower = sma - atr * p.atr_min_ratio
-                    if curr_price <= atr_lower:
-                        # ATR止损卖出
-                        logging.warning(f'ATR止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                        f'ATR止损线:{atr_lower}')
-                        order_sell(code, curr_price, sell_volume, 'ATR止损委托', log=False)
-                        continue
-
-                    # 分段ATR 止盈委托
-                    if curr_price >= cost_price * p.atr_threshold:
-                        atr_upper = sma + atr * (p.atr_max_h_ratio - held_day * p.atr_max_drop)
-                        if curr_price >= atr_upper:
-                            # 高位 ATR止盈卖出
-                            logging.warning(f'HATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'HATR止盈线:{atr_upper}')
-                            order_sell(code, curr_price, sell_volume, 'HATR止盈委托', log=False)
-                            continue
-                    else:
-                        atr_upper = sma + atr * (p.atr_max_l_ratio - held_day * p.atr_max_drop)
-                        if curr_price >= atr_upper:
-                            # 低位 ATR止盈卖出
-                            logging.warning(f'LATR止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'LATR止盈线:{atr_upper}')
-                            order_sell(code, curr_price, sell_volume, 'LATR止盈委托', log=False)
-                            continue
-
-            # 绝对止盈止损卖出
-            if held_day > 0:
-                switch_lower = cost_price * (p.min_income + held_day * p.min_rise)
-                if curr_price <= switch_lower:
-                    order_sell(code, curr_price, sell_volume, 'ABS止损委托')
-                    continue
-                elif curr_price >= cost_price * p.max_income:
-                    order_sell(code, curr_price, sell_volume, 'ABS止盈委托')
-                    continue
+    my_seller.execute_sell(curr_time, positions, quotes, held_days, max_prices, cache_indicators)
 
 
 # ======== 框架 ========
 
 
-def execute_strategy(curr_date: str, curr_time: str, quotes: Dict):
+def execute_strategy(curr_date: str, curr_time: str, curr_quotes: Dict):
     positions = xt_delegate.check_positions()
-    scan_sell(quotes, curr_time, positions)
+    scan_sell(curr_quotes, curr_time, positions)
 
-    # 早盘
-    if '11:25' <= curr_time:
-        scan_buy(quotes, curr_date, positions)
-
-    # 午盘
-    elif '13:00' <= curr_time <= '14:56':
-        scan_buy(quotes, curr_date, positions)
+    if '09:45' <= curr_time <= '11:30' or '13:00' <= curr_time <= '14:56':
+        scan_buy(curr_quotes, curr_date, positions)
 
 
 def callback_sub_whole(quotes: Dict) -> None:
     now = datetime.datetime.now()
 
+    curr_date = now.strftime('%Y-%m-%d')
     curr_time = now.strftime('%H:%M')
-    if '09:30' <= curr_time <= '11:30' or '13:00' <= curr_time <= '14:56':
-        # 每分钟输出一行开头
-        if cache_limits['prev_minutes'] != curr_time:
-            cache_limits['prev_minutes'] = curr_time
-            print(f'\n[{curr_time}]', end='')
 
-        # 每秒钟开始的时候输出一个点
-        with lock_quotes_update:
-            curr_seconds = now.strftime('%H:%M:%S')
-            cache_quotes.update(quotes)
-            if cache_limits['prev_seconds'] != curr_seconds:
-                cache_limits['prev_seconds'] = curr_seconds
-                curr_date = now.strftime('%Y-%m-%d')
+    # 每分钟输出一行开头
+    if cache_limits['prev_minutes'] != curr_time:
+        cache_limits['prev_minutes'] = curr_time
+        print(f'\n[{curr_time}]', end='')
 
-                # 只有在交易日才执行策略
-                if check_today_is_open_day(curr_date):
-                    print(map_num_to_chr(len(cache_quotes)), end='')
-                    execute_strategy(curr_date, curr_time, cache_quotes)
-                    cache_quotes.clear()
-                else:
-                    print('_', end='')
+    # 每秒钟开始的时候输出一个点
+    with lock_quotes_update:
+        curr_seconds = now.strftime('%H:%M:%S')
+        cache_quotes.update(quotes)
+        if cache_limits['prev_seconds'] != curr_seconds:
+            cache_limits['prev_seconds'] = curr_seconds
+
+            # 只有在交易日才执行策略
+            if check_today_is_open_day(curr_date):
+                print(map_num_to_chr(len(cache_quotes)), end='')
+                execute_strategy(curr_date, curr_time, cache_quotes)
+                cache_quotes.clear()
+            else:
+                print('_', end='')
 
 
 def subscribe_tick():
@@ -539,6 +448,8 @@ if __name__ == '__main__':
         client_path=QMT_CLIENT_PATH,
         xt_callback=MyCallback())
 
+    my_seller = Seller(xt_delegate, p, STRATEGY_NAME)
+
     # 重启时防止没有数据在这先加载历史数据
     temp_now = datetime.datetime.now()
     temp_date = temp_now.strftime('%Y-%m-%d')
@@ -548,7 +459,8 @@ if __name__ == '__main__':
         refresh_code_list()
         prepare_indicators()
         # 重启如果在交易时间则订阅Tick
-        if '09:30' <= temp_time <= '14:57':
+
+        if '09:30' <= temp_time <= '11:30' or '13:00' <= temp_time <= '14:56':
             subscribe_tick()
 
     # 定时任务启动

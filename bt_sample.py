@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 from xtquant import xtdata
 from tools.utils_basic import logging_init, load_json, save_json
-from tools.xt_subscriber import sub_whole_quote
+from delegate.xt_subscriber import sub_whole_quote
 # from tools.xt_delegate import XtDelegate
 
 
