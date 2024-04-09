@@ -90,14 +90,14 @@ print(query)
 
 class p:
     # 下单持仓
-    switch_begin = '09:45'  # 每天最早换仓时间
+    switch_begin = '10:30'  # 每天最早换仓时间
     hold_days = 3           # 持仓天数
     max_count = 10          # 持股数量上限
-    amount_each = 10000      # 每个仓的资金上限
+    amount_each = 10000     # 每个仓的资金上限
     order_premium = 0.08    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 卖点：绝对止盈止损
-    switch_max_rise = 0.02  # 换仓上限乘数
+    clean_max_rise = 0.008  # 换仓上限乘数
     max_income = 1.45       # 止盈率（ATR失效时使用）
     min_income = 0.978      # 止损率（ATR失效时使用）
     min_rise = 0.002        # 换仓下限乘数
@@ -110,8 +110,10 @@ class p:
     atr_min_ratio = 0.85    # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数，用来计算atr的中间变量
     # 卖点：回落止盈
-    fall_trigger = 1.03     # 回落止盈的涨幅触发阈值
-    fall_limit = 0.02       # 回落止盈的倍数
+    fall_h_trigger = 1.09   # 回落止盈的涨幅触发阈值
+    fall_h_limit = 0.051    # 回落止盈的倍数
+    fall_l_trigger = 1.03   # 回落止盈的涨幅触发阈值
+    fall_l_limit = 0.02     # 回落止盈的倍数
     # 买点：策略参数
     buy_interval = 15       # 问财买点的时间间隔（秒）
     clean_interval = 30     # 清除缓存的时间间隔（秒）
@@ -383,10 +385,10 @@ def scan_sell(quotes: Dict, curr_time: str, positions: List[XtPosition]) -> None
 
 
 def execute_strategy(
-        curr_date: str,
-        curr_time: str,
-        curr_seconds: str,
-        curr_quotes: Dict,
+    curr_date: str,
+    curr_time: str,
+    curr_seconds: str,
+    curr_quotes: Dict,
 ):
     positions = xt_delegate.check_positions()
 

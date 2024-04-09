@@ -9,6 +9,7 @@ from xtquant.xttype import XtPosition
 from delegate.xt_delegate import order_submit
 
 
+
 def get_sma(row_close, period) -> float:
     sma = ta.SMA(row_close, timeperiod=period)
     return sma[-1]
@@ -64,12 +65,12 @@ class Seller:
                 # 换仓卖天
                 if held_day > 0:
                     switch_lower = cost_price * (p.min_income + held_day * p.min_rise)
-                    switch_upper = cost_price * (1 + held_day * p.switch_max_rise)
+                    switch_upper = cost_price * (1 + held_day * p.clean_max_rise)
 
                     # 未满足盈利目标的仓位 & 大于当日最早换仓时间
                     if held_day > p.hold_days and curr_time >= p.switch_begin:
                         if switch_lower < curr_price < switch_upper:
-                            self.order_sell(code, curr_price, sell_volume, '��������')
+                            self.order_sell(code, curr_price, sell_volume, '换仓卖单')
                             continue
 
                 # 回落止盈
@@ -78,9 +79,14 @@ class Seller:
                         max_price = max_prices[code]
 
                         # 历史最高大于触发阈值，且当前价格在最高点回落超过阈值
-                        if max_price > cost_price * p.fall_trigger and curr_price < max_price * (1 - p.fall_limit):
-                            self.order_sell(code, curr_price, sell_volume, '����ֹӯ')
-                            continue
+                        if max_price > cost_price * p.fall_h_trigger:
+                            if curr_price < max_price * (1 - p.fall_h_limit):
+                                self.order_sell(code, curr_price, sell_volume, '高落止盈')
+                                continue
+                        elif max_price > cost_price * p.fall_l_trigger:
+                            if curr_price < max_price * (1 - p.fall_l_limit):
+                                self.order_sell(code, curr_price, sell_volume, '低落止盈')
+                                continue
 
                 # ATR止盈止损
                 if held_day > 0:
@@ -97,9 +103,9 @@ class Seller:
                         atr_lower = sma - atr * p.atr_min_ratio
                         if curr_price <= atr_lower:
                             # ATR 止损卖出
-                            logging.warning(f'ATRֹ��ί�� {code} {sell_volume}��\t�ּ�:{curr_price:.3f}\t'
-                                            f'ATRֹ����:{atr_lower}')
-                            self.order_sell(code, curr_price, sell_volume, 'ATRֹ��ί��', log=False)
+                            logging.warning(f'ATRֹ止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                            f'ATRֹ止损线:{atr_lower}')
+                            self.order_sell(code, curr_price, sell_volume, 'ATRֹ止损', log=False)
                             continue
 
                         # 分段ATR 止盈委托
@@ -107,25 +113,25 @@ class Seller:
                             atr_upper = sma + atr * (p.atr_max_h_ratio - held_day * p.atr_max_drop)
                             if curr_price >= atr_upper:
                                 # 高位 ATR止盈卖出
-                                logging.warning(f'HATRֹӯί�� {code} {sell_volume}��\t�ּ�:{curr_price:.3f}\t'
-                                                f'HATRֹӯ��:{atr_upper}')
-                                self.order_sell(code, curr_price, sell_volume, 'HATRֹӯί��', log=False)
+                                logging.warning(f'HATRֹ止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                                f'HATRֹ止盈线:{atr_upper}')
+                                self.order_sell(code, curr_price, sell_volume, 'HATRֹ止盈', log=False)
                                 continue
                         else:
                             atr_upper = sma + atr * (p.atr_max_l_ratio - held_day * p.atr_max_drop)
                             if curr_price >= atr_upper:
                                 # 低位 ATR止盈卖出
-                                logging.warning(f'LATRֹӯί�� {code} {sell_volume}��\t�ּ�:{curr_price:.3f}\t'
-                                                f'LATRֹӯ��:{atr_upper}')
-                                self.order_sell(code, curr_price, sell_volume, 'LATRֹӯί��', log=False)
+                                logging.warning(f'LATRֹ止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
+                                                f'LATRֹ止盈线:{atr_upper}')
+                                self.order_sell(code, curr_price, sell_volume, 'LATRֹ止盈', log=False)
                                 continue
 
                 # 绝对止盈止损卖出
                 if held_day > 0:
                     switch_lower = cost_price * (p.min_income + held_day * p.min_rise)
                     if curr_price <= switch_lower:
-                        self.order_sell(code, curr_price, sell_volume, 'ABSֹ��ί��')
+                        self.order_sell(code, curr_price, sell_volume, 'ABSֹ止损')
                         continue
                     elif curr_price >= cost_price * p.max_income:
-                        self.order_sell(code, curr_price, sell_volume, 'ABSֹӯί��')
+                        self.order_sell(code, curr_price, sell_volume, 'ABSֹ止盈')
                         continue
