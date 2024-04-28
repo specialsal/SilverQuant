@@ -10,9 +10,11 @@ import schedule
 from random import random
 from typing import List, Dict, Set, Optional, Union
 
+import akshare as ak
 import numpy as np
 import pandas as pd
 import talib as ta
+
 from xtquant import xtconstant, xtdata
 from xtquant.xttype import XtPosition, XtTrade, XtOrderError, XtOrderResponse
 
@@ -86,10 +88,10 @@ class p:
     atr_min_ratio = 0.85    # 止损atr的乘数
     sma_time_period = 3     # 卖点sma的天数，用来计算atr的中间变量
     # 回落止盈
-    fall_h_trigger = 1.09   # 回落止盈的涨幅触发阈值
-    fall_h_limit = 0.051    # 回落止盈的倍数
-    fall_l_trigger = 1.03   # 回落止盈的涨幅触发阈值
-    fall_l_limit = 0.02     # 回落止盈的倍数
+    fall_h_trigger = 1.06   # 高位回落止盈的涨幅触发阈值
+    fall_h_limit = 0.051    # 高位回落止盈的倍数
+    fall_l_trigger = 1.03   # 高位回落止盈的涨幅触发阈值
+    fall_l_limit = 0.021    # 高位回落止盈的倍数
     # 买点：策略参数
     L = 20                  # 选股HMA短周期
     M = 30                  # 选股HMA中周期
@@ -149,10 +151,24 @@ def refresh_code_list():
     cache_blacklist.update(black_codes)
     print(f'Black list refreshed {len(cache_blacklist)} codes.')
 
+    # 中证1000（399852）在5日线之上的时候才开仓
+    end_dt = datetime.datetime.now()
+    start_dt = end_dt - datetime.timedelta(days=15)
+    index_zh_a_hist_df = ak.index_zh_a_hist(
+        symbol="399852",
+        period="daily",
+        start_date=start_dt.strftime('%Y%m%d'),
+        end_date=end_dt.strftime('%Y%m%d'),
+    )
+    values = index_zh_a_hist_df.tail(5)['收盘'].values
+
     cache_whitelist.clear()
-    white_codes = get_whitelist_codes(target_stock_prefixes, p.market_value_min, p.market_value_max)
-    cache_whitelist.update(white_codes)
-    print(f'White list refreshed {len(cache_whitelist)} codes.')
+    if values[-1] > np.average(values):
+        white_codes = get_whitelist_codes(target_stock_prefixes, p.market_value_min, p.market_value_max)
+        cache_whitelist.update(white_codes)
+        print(f'White list refreshed {len(cache_whitelist)} codes.')
+    else:
+        print(f'White list cleared because 399852 is lower than MA.')
 
 
 def calculate_indicators(data: Union[Dict, pd.DataFrame]) -> Optional[Dict]:
@@ -417,18 +433,20 @@ def callback_sub_whole(quotes: Dict) -> None:
                 print('_', end='')
 
 
-def subscribe_tick():
+def subscribe_tick(notice=True):
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
-
+    if notice:
+        sample_send_msg(f'[{QMT_ACCOUNT_ID}] {STRATEGY_NAME} 策略启动', 0, '')
     print('[启动行情订阅]', end='')
     cache_limits['sub_seq'] = xtdata.subscribe_whole_quote(["SH", "SZ"], callback=callback_sub_whole)
 
 
-def unsubscribe_tick():
+def unsubscribe_tick(notice=True):
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
-
+    if notice:
+        sample_send_msg(f'[{QMT_ACCOUNT_ID}] {STRATEGY_NAME} 策略关闭', 0, '')
     if 'sub_seq' in cache_limits:
         xtdata.unsubscribe_quote(cache_limits['sub_seq'])
         print('\n[关闭行情订阅]')
@@ -473,9 +491,9 @@ if __name__ == '__main__':
     schedule.every().day.at('09:15').do(prepare_indicators)
 
     schedule.every().day.at('09:30').do(subscribe_tick)
-    schedule.every().day.at('11:30').do(unsubscribe_tick)
+    schedule.every().day.at('11:30').do(unsubscribe_tick, False)
 
-    schedule.every().day.at('13:00').do(subscribe_tick)
+    schedule.every().day.at('13:00').do(subscribe_tick, False)
     schedule.every().day.at('15:00').do(unsubscribe_tick)
 
     while True:
