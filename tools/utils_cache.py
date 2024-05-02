@@ -15,6 +15,10 @@ from tools.utils_basic import symbol_to_code, pd_show_all
 open_day_cache = {}
 OPEN_DAY_CACHE_PATH = '_cache/_open_day_list.csv'
 
+trade_day_cache = {}
+trade_max_year_key = 'max_year'
+TRADE_DAY_CACHE_PATH = '_cache/_open_day_list_sina.csv'
+
 STOCK_LIST_PATH = '_cache/_stock_list.csv'
 STOCK_LIST_TXT_PATH = '_cache/_stock_list.txt'
 HISTORICAL_OPEN_DAYS_PATH = '_cache/_historical_open_days.csv'
@@ -63,13 +67,13 @@ def save_json(path: str, var: dict) -> None:
 
 
 def daily_once(
-        lock: Optional[threading.Lock],   # None时不使用线程锁
-        memory_cache: Dict,     # 不能为None
-        file_cache_path: Optional[str],   # None时重启程序则失效
-        cache_key: str,
-        curr_date: str,
-        function: Callable,
-        *args,
+    lock: Optional[threading.Lock],   # None时不使用线程锁
+    memory_cache: Dict,     # 不能为None
+    file_cache_path: Optional[str],   # None时重启程序则失效
+    cache_key: str,
+    curr_date: str,
+    function: Callable,
+    *args,
 ) -> None:
     def _job():
         if cache_key in memory_cache:
@@ -143,13 +147,55 @@ def del_keys(lock: threading.Lock, path: str, keys: List[str]) -> None:
         save_json(path, temp_json)
 
 
-def check_today_is_open_day_by_df(df: pd.DataFrame, today: str) -> bool:
+def get_disk_trade_day_list_and_update_max_year():
+    # 写内存
+    df = pd.read_csv(TRADE_DAY_CACHE_PATH)
+    trade_dates = pd.to_datetime(df['trade_date']).dt.strftime('%Y-%m-%d').values
+    trade_day_cache[trade_max_year_key] = trade_dates[-1][:4]
+    return trade_dates
+
+
+def check_today_is_open_day_sina(curr_date: str) -> bool:
+    curr_year = curr_date[:4]
+
+    # 内存缓存
+    if curr_date in trade_day_cache:
+        if curr_year <= trade_day_cache[trade_max_year_key]:
+            return trade_day_cache[curr_date]
+
+    # 文件缓存
+    if os.path.exists(TRADE_DAY_CACHE_PATH):  # 文件缓存存在
+        trade_day_list = get_disk_trade_day_list_and_update_max_year()
+        if curr_year <= trade_day_cache[trade_max_year_key]: # 未过期
+            ans = curr_date in trade_day_list
+            trade_day_cache[curr_date] = ans
+            print(f'[{curr_date} is {ans} trade day in memory]')
+            return ans
+
+    # 网络缓存
+    df = ak.tool_trade_date_hist_sina()
+    df.to_csv(TRADE_DAY_CACHE_PATH)
+    print(f'Cache trade day list {curr_year} - {int(curr_year) + 1} in {TRADE_DAY_CACHE_PATH}.')
+
+    trade_day_list = get_disk_trade_day_list_and_update_max_year()
+    if curr_year <= trade_day_cache[trade_max_year_key]:  # 未过期
+        ans = curr_date in trade_day_list
+        trade_day_cache[curr_date] = ans
+        print(f'[{curr_date} is {ans} trade day in memory]')
+        return ans
+
+    # 实在拿不到数据默认为True
+    print(f'[DO NOT KNOW {curr_date}, default to True trade day]')
+    return True
+
+
+def check_today_is_open_day_tushare_by_df(df: pd.DataFrame, today: str) -> bool:
     today_int = int(today)
     result = df[df['cal_date'] == today_int]
     return result['is_open'].values[0] == 1
 
 
-def check_today_is_open_day(curr_date: str) -> bool:
+def check_today_is_open_day_tushare(curr_date: str) -> bool:
     today = datetime.datetime.strptime(curr_date, '%Y-%m-%d').strftime('%Y%m%d')
     # 内存缓存
     if today in open_day_cache.keys():
@@ -159,7 +205,7 @@ def check_today_is_open_day(curr_date: str) -> bool:
     if os.path.exists(OPEN_DAY_CACHE_PATH):  # 文件缓存存在
         df = pd.read_csv(OPEN_DAY_CACHE_PATH)
         if int(today) <= df['cal_date'].max():  # 文件缓存未过期
-            open_day_cache[today] = check_today_is_open_day_by_df(df, today)
+            open_day_cache[today] = check_today_is_open_day_tushare_by_df(df, today)
             print(f'[{curr_date} is {open_day_cache[today]} open day in memory]')
             return open_day_cache[today]
 
@@ -176,10 +222,19 @@ def check_today_is_open_day(curr_date: str) -> bool:
     print(f'Cache open day list {curr_date} - {next_year_date} in {OPEN_DAY_CACHE_PATH}.')
 
     df = pd.read_csv(OPEN_DAY_CACHE_PATH)
-    open_day_cache[today] = check_today_is_open_day_by_df(df, today)
+    open_day_cache[today] = check_today_is_open_day_tushare_by_df(df, today)
     print(f'[{curr_date} is {open_day_cache[today]} open day in memory]')
 
     return open_day_cache[today]
+
+
+def check_today_is_open_day(curr_date: str, use_tushare=False) -> bool:
+    """
+    curr_date example: '2024-12-31'
+    """
+    if use_tushare:
+        return check_today_is_open_day_tushare(curr_date)
+    return check_today_is_open_day_sina(curr_date)
 
 
 def today_is_open_day():
@@ -385,6 +440,15 @@ if __name__ == '__main__':
     # }, 30 * 10000 * 10000, 600 * 10000 * 10000)
     # print(len(temp))
 
-    # print(get_blacklist_codes())
-    max_prices = load_json('../_cache/prod_hma/max_price.json')
-    print(max_prices)
+    # # print(get_blacklist_codes())
+    # max_prices = load_json('../_cache/prod_hma/max_price.json')
+    # print(max_prices)
+
+    # print(check_today_is_open_day('2024-12-31'))
+    # print(check_today_is_open_day('2024-04-28'))
+    today= datetime.datetime.now().strftime('%Y-%m-%d')
+    print(today, check_today_is_open_day(today))
+    print(today, check_today_is_open_day(today))
+    print(today, check_today_is_open_day(today))
+    if not check_today_is_open_day(today):
+        print(111)
