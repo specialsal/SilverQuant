@@ -1,6 +1,3 @@
-"""
-TODO:
-"""
 import time
 import math
 import logging
