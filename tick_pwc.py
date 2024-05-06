@@ -66,23 +66,14 @@ target_stock_prefixes = {  # set
 }
 
 query = '，'.join([
-    # '涨幅小于5%',
     '主板',
     '非ST',
-    # '非银行',
-    # '非证券',
-    # '非交通',
-    # '非地产',
-    # '非基建',
-    '向上突破60日均线',
-    # '向上突破30日均线',
-    # 'mtm金叉',
-    # 'skdj金叉',
-    # '放量',
-    '大单净量大于0.1',
-    '量比大于1.99',
-    '委比大于0.02',
-    '昨日流通市值从小到大排序',
+    '向上突破20日均线',
+    '大单净量大于0.03',
+    '量比大于2',
+    '利润为正',
+    '利润增长大于5%',
+    '委比大于0.02'
 ])
 print(query)
 
@@ -92,13 +83,13 @@ class p:
     switch_begin = '09:45'  # 每天最早换仓时间
     hold_days = 3           # 持仓天数
     max_count = 10          # 持股数量上限
-    amount_each = 10000     # 每个仓的资金上限
+    amount_each = 6500     # 每个仓的资金上限
     order_premium = 0.08    # 保证成功下单成交的溢价
     upper_buy_count = 3     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
     # 卖点：绝对止盈止损
     clean_max_rise = 0.008  # 换仓上限乘数
     max_income = 1.45       # 止盈率（ATR失效时使用）
-    min_income = 0.958      # 止损率（ATR失效时使用）
+    min_income = 0.968      # 止损率（ATR失效时使用）
     min_rise = 0.002        # 换仓下限乘数
     # 卖点：动态止盈止损
     atr_threshold = 1.05    # 高低涨幅确定atr止盈的分界
@@ -116,14 +107,13 @@ class p:
     # 买点：策略参数
     buy_interval = 15       # 问财买点的时间间隔（秒）
     clean_interval = 30     # 清除缓存的时间间隔（秒）
-    inc_limit = 1.03        # 相对于昨日收盘的涨幅限制
+    inc_limit = 1.04        # 相对于昨日收盘的涨幅限制
     min_price = 2.00        # 限制最低可买入股票的现价
-    market_value_min = 15 * 10000 * 10000   # 市值下限
+    market_value_min = 50 * 10000 * 10000   # 市值下限
     market_value_max = 600 * 10000 * 10000  # 市值上限
     # 历史指标
     day_count = 5           # 3天atr和sma，5天够用
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
-
 
 class MyCallback(XtBaseCallback):
     def on_stock_trade(self, trade: XtTrade):
@@ -161,6 +151,9 @@ def held_increase() -> None:
 
 
 def refresh_code_list():
+    if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        return
+
     cache_blacklist.clear()
     black_codes = get_blacklist_codes(target_stock_prefixes)
     cache_blacklist.update(black_codes)
@@ -168,14 +161,14 @@ def refresh_code_list():
 
     # 中证1000（399852）在5日线之上的时候才开仓
     end_dt = datetime.datetime.now()
-    start_dt = end_dt - datetime.timedelta(days=15)
+    start_dt = end_dt - datetime.timedelta(days=10 + p.index_day_count)
     index_zh_a_hist_df = ak.index_zh_a_hist(
         symbol="399852",
         period="daily",
         start_date=start_dt.strftime('%Y%m%d'),
         end_date=end_dt.strftime('%Y%m%d'),
     )
-    values = index_zh_a_hist_df.tail(5)['收盘'].values
+    values = index_zh_a_hist_df.tail(p.index_day_count)['收盘'].values
 
     cache_whitelist.clear()
     if values[-1] > np.average(values):
@@ -445,8 +438,8 @@ def callback_sub_whole(quotes: Dict) -> None:
 def subscribe_tick(notice=True):
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
-    if notice:
-        sample_send_msg(f'[{QMT_ACCOUNT_ID}] {STRATEGY_NAME} 策略启动', 0, '')
+
+    sample_send_msg(f'[{QMT_ACCOUNT_ID}] {STRATEGY_NAME} {"启动" if notice else "恢复"}', 0, '')
     print('[启动行情订阅]', end='')
     cache_limits['sub_seq'] = xtdata.subscribe_whole_quote(["SH", "SZ"], callback=callback_sub_whole)
 
@@ -454,8 +447,8 @@ def subscribe_tick(notice=True):
 def unsubscribe_tick(notice=True):
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
-    if notice:
-        sample_send_msg(f'[{QMT_ACCOUNT_ID}] {STRATEGY_NAME} 策略关闭', 0, '')
+
+    sample_send_msg(f'[{QMT_ACCOUNT_ID}] {STRATEGY_NAME} {"关闭" if notice else "暂停"}', 0, '')
     if 'sub_seq' in cache_limits:
         xtdata.unsubscribe_quote(cache_limits['sub_seq'])
         print('\n[关闭行情订阅]')
