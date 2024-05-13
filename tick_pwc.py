@@ -258,7 +258,7 @@ def wencai_select() -> dict:
 
             if df is not None and type(df) != dict and df.shape[0] > 0:
                 with lock_wencai_select:
-                    df['最新价'] = df['最新价'].astype(float)
+                    df['最新价'] = df[f'收盘价:不复权[{datetime.datetime.now().strftime("%Y%m%d")}]'].astype(float)
                     print(f'Wencai: {now.strftime("%H:%M:%S")}\n', df[['股票代码', '股票简称', '最新价']])
                     return df.set_index('股票代码')['最新价'].to_dict()
     return {}
