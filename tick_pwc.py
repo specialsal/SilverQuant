@@ -112,6 +112,7 @@ class p:
     market_value_min = 50 * 10000 * 10000   # 市值下限
     market_value_max = 600 * 10000 * 10000  # 市值上限
     # 历史指标
+    index_day_count = 5     # 大盘开仓逻辑用的天数
     day_count = 5           # 3天atr和sma，5天够用
     data_cols = ['close', 'high', 'low']    # 历史数据需要的列
 
