@@ -1,137 +1,77 @@
+import datetime
 import logging
-from typing import List, Dict
+import pandas as pd
+from typing import List, Dict, Optional
 
-import numpy as np
-import talib as ta
-from xtquant import xtconstant
 from xtquant.xttype import XtPosition
 
-from delegate.xt_delegate import order_submit
+from delegate.base_delegate import BaseDelegate
+from tools.utils_basic import get_limit_down_price
 
 
-
-def get_sma(row_close, period) -> float:
-    sma = ta.SMA(row_close, timeperiod=period)
-    return sma[-1]
-
-
-def get_atr(row_close, row_high, row_low, period) -> float:
-    atr = ta.ATR(row_high, row_low, row_close, timeperiod=period)
-    return atr[-1]
-
-
-class Seller:
-    def __init__(self, xt_delegate, param, strategy_name):
-        self.xt_delegate = xt_delegate
-        self.param = param
+class BaseSeller:
+    def __init__(self, strategy_name: str, delegate: BaseDelegate, parameters):
         self.strategy_name = strategy_name
+        self.delegate = delegate
+        self.order_premium = parameters.order_premium
 
-    def order_sell(self, code, price, volume, remark, log=True) -> None:
-        if log:
-            logging.warning(f'{remark} {code} {volume}股\t现价:{price:.3f}')
-        order_submit(
-            self.xt_delegate,
-            xtconstant.STOCK_SELL,
-            code,
-            price,
-            volume,
-            remark,
-            self.param.order_premium,
-            self.strategy_name
-        )
+    def order_sell(self, code, quote, volume, remark, log=True) -> None:
+        # TODO: 20cm
+        if volume > 0:
+            order_price = quote['lastPrice'] - self.order_premium
+            order_price = max(order_price, get_limit_down_price(code, quote['lastClose']))
+
+            self.delegate.order_market_close(
+                code=code,
+                price=order_price,
+                volume=volume,
+                remark=remark,
+                strategy_name=self.strategy_name)
+
+            if log:
+                logging.warning(f'{remark} {code}\t现价:{order_price:.3f} {volume}股')
+
+            if self.delegate.callback is not None:
+                self.delegate.callback.record_order(
+                    order_time=datetime.datetime.now().timestamp(),
+                    code=code,
+                    price=order_price,
+                    volume=volume,
+                    side='卖出委托',
+                    remark=remark)
+
+        else:
+            print(f'{code} 挂单量为0，不委托')
 
     def execute_sell(
         self,
+        quotes: Dict[str, Dict],
+        curr_date: str,
         curr_time: str,
         positions: List[XtPosition],
-        quotes: Dict[str, Dict],
         held_days: Dict[str, int],
         max_prices: Dict[str, float],
-        cache_indicators: Dict[str, Dict],
+        cache_history: Dict[str, pd.DataFrame]
     ) -> None:
-        p = self.param
         for position in positions:
             code = position.stock_code
-            cost_price = position.open_price
-            sell_volume = position.volume
 
             # 如果有数据且有持仓时间记录
             if (code in quotes) and (code in held_days):
-                held_day = held_days[code]
+                self.check_sell(
+                    code=code,
+                    quote=quotes[code],
+                    curr_date=curr_date,
+                    curr_time=curr_time,
+                    position=position,
+                    held_day=held_days[code],
+                    max_price=max_prices[code] if code in max_prices else None,
+                    history=cache_history[code] if code in cache_history else None,
+                )
 
-                quote = quotes[code]
-                curr_price = quote['lastPrice']
-
-                # 换仓卖天
-                if held_day > 0:
-                    switch_lower = cost_price * (p.min_income + held_day * p.min_rise)
-                    switch_upper = cost_price * (1 + held_day * p.clean_max_rise)
-
-                    # 未满足盈利目标的仓位 & 大于当日最早换仓时间
-                    if held_day > p.hold_days and curr_time >= p.switch_begin:
-                        if switch_lower < curr_price < switch_upper:
-                            self.order_sell(code, curr_price, sell_volume, '换仓卖单')
-                            continue
-
-                # 回落止盈
-                if held_day > 0:
-                    if code in max_prices:
-                        max_price = max_prices[code]
-
-                        # 历史最高大于触发阈值，且当前价格在最高点回落超过阈值
-                        if max_price > cost_price * p.fall_h_trigger:
-                            if curr_price < max_price * (1 - p.fall_h_limit):
-                                self.order_sell(code, curr_price, sell_volume, '高落止盈')
-                                continue
-                        elif max_price > cost_price * p.fall_l_trigger:
-                            if curr_price < max_price * (1 - p.fall_l_limit):
-                                self.order_sell(code, curr_price, sell_volume, '低落止盈')
-                                continue
-
-                # ATR止盈止损
-                if held_day > 0:
-                    if code in cache_indicators:
-                        quote = quotes[code]
-                        close = np.append(cache_indicators[code]['CLOSE_3D'], quote['lastPrice'])
-                        high = np.append(cache_indicators[code]['HIGH_3D'], quote['high'])
-                        low = np.append(cache_indicators[code]['LOW_3D'], quote['low'])
-
-                        sma = get_sma(close, p.sma_time_period)
-                        atr = get_atr(close, high, low, p.atr_time_period)
-
-                        # ATR 止损委托
-                        atr_lower = sma - atr * p.atr_min_ratio
-                        if curr_price <= atr_lower:
-                            # ATR 止损卖出
-                            logging.warning(f'ATRֹ止损委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                            f'ATRֹ止损线:{atr_lower}')
-                            self.order_sell(code, curr_price, sell_volume, 'ATRֹ止损', log=False)
-                            continue
-
-                        # 分段ATR 止盈委托
-                        if curr_price >= cost_price * p.atr_threshold:
-                            atr_upper = sma + atr * (p.atr_max_h_ratio - held_day * p.atr_max_drop)
-                            if curr_price >= atr_upper:
-                                # 高位 ATR止盈卖出
-                                logging.warning(f'HATRֹ止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                                f'HATRֹ止盈线:{atr_upper}')
-                                self.order_sell(code, curr_price, sell_volume, 'HATRֹ止盈', log=False)
-                                continue
-                        else:
-                            atr_upper = sma + atr * (p.atr_max_l_ratio - held_day * p.atr_max_drop)
-                            if curr_price >= atr_upper:
-                                # 低位 ATR止盈卖出
-                                logging.warning(f'LATRֹ止盈委托 {code} {sell_volume}股\t现价:{curr_price:.3f}\t'
-                                                f'LATRֹ止盈线:{atr_upper}')
-                                self.order_sell(code, curr_price, sell_volume, 'LATRֹ止盈', log=False)
-                                continue
-
-                # 绝对止盈止损卖出
-                if held_day > 0:
-                    switch_lower = cost_price * (p.min_income + held_day * p.min_rise)
-                    if curr_price <= switch_lower:
-                        self.order_sell(code, curr_price, sell_volume, 'ABSֹ止损')
-                        continue
-                    elif curr_price >= cost_price * p.max_income:
-                        self.order_sell(code, curr_price, sell_volume, 'ABSֹ止盈')
-                        continue
+    def check_sell(
+        self, code: str, quote: Dict, curr_date: str, curr_time: str,
+        position: XtPosition, held_day: int, max_price: Optional[float],
+        history: Optional[pd.DataFrame],
+    ) -> bool:
+        return False  # False 表示没有卖过，不阻挡其他Seller卖出

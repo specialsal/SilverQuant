@@ -1,0 +1,234 @@
+from typing import List
+
+from gmtrade.api import *
+from gmtrade.pb.account_pb2 import Cash, Position, Order
+
+from delegate.base_delegate import BaseDelegate
+from delegate.gm_callback import GmCallback
+
+from credentials import GM_ACCOUNT_ID, GM_CLIENT_TOKEN
+
+from tools.utils_basic import code_to_gmsymbol, gmsymbol_to_code
+from tools.utils_ding import DingMessager
+
+
+GM_SERVER_HOST = 'api.myquant.cn:9000'
+
+
+class GmAsset:
+    def __init__(self, cash: Cash):
+        self.account_id = cash.account_id
+        self.cash = round(cash.available, 2)
+        self.frozen_cash = round(cash.frozen, 2)
+        self.total_asset = round(cash.nav, 2)
+
+
+class GmOrder:
+    def __init__(self, order: Order):
+        self.account_id = order.account_id
+        self.stock_code = gmsymbol_to_code(order.symbol)
+        self.order_id = order.order_id
+        self.order_volume = order.volume
+        self.price = order.price
+        self.order_type = order.order_type
+        self.order_status = order.status
+
+
+class GmPosition:
+    def __init__(self, position: Position):
+        self.account_id = position.account_id
+        self.stock_code = gmsymbol_to_code(position.symbol)
+        self.volume = position.volume
+        self.can_use_volume = position.available
+        self.open_price = position.vwap
+        self.market_value = position.amount
+
+
+class GmDelegate(BaseDelegate):
+    def __init__(self, account_id: str = None, callback: GmCallback = None, ding_messager: DingMessager = None):
+        super().__init__()
+        self.account_id = '**' + str(account_id)[-4:]
+        self.ding_messager = ding_messager
+
+        set_endpoint(GM_SERVER_HOST)
+        set_token(GM_CLIENT_TOKEN)
+
+        self.account = account(account_id=GM_ACCOUNT_ID, account_alias='')
+        login(self.account)
+
+        if callback is not None:
+            self.callback = callback
+            self.callback.register_callback()
+
+    def shutdown(self):
+        self.callback.unregister_callback()
+
+    def check_asset(self) -> GmAsset:
+        cash: Cash = get_cash(self.account)
+        return GmAsset(cash)
+
+    def check_orders(self) -> List[GmOrder]:
+        orders = get_orders(self.account)
+        return [GmOrder(order) for order in orders]
+
+    def check_positions(self) -> List[GmPosition]:
+        positions = get_positions(self.account)
+        return [GmPosition(position) for position in positions]
+
+    def order_market_open(
+        self,
+        code: str,
+        price: float,
+        volume: int,
+        remark: str,
+        strategy_name: str = 'non-name',
+    ):
+        """
+        [
+            account_id: "189ca421-49db-11ef-9fa8-00163e022aa6"
+            cl_ord_id: "83fe1b04-4afa-11ef-97f5-00163e022aa6"
+            order_id: "83fe1b0b-4afa-11ef-97f5-00163e022aa6"
+            ex_ord_id: "83fe1b0b-4afa-11ef-97f5-00163e022aa6"
+            symbol: "SHSE.600000"
+            side: 1
+            position_effect: 1
+            order_type: 2
+            order_qualifier: 3
+            status: 1
+            order_style: 1
+            volume: 100
+            created_at {
+              seconds: 1721962528
+              nanos: 852249292
+            }
+            updated_at {
+              seconds: 1721962528
+              nanos: 852249292
+            }
+        ]
+        """
+        print(f'[{remark}]{code}')
+        if self.ding_messager is not None:
+            self.ding_messager.send_text(
+                f'[{self.account_id}]{strategy_name}:{remark}\n'
+                f'{code}委买{volume}股{price:.2f}元',
+                '')
+
+        orders = order_volume(
+            symbol=code_to_gmsymbol(code),
+            price=price,
+            volume=volume,
+            side=OrderSide_Buy,
+            order_type=OrderType_Market,
+            order_qualifier=OrderQualifier_B5TC,
+            position_effect=PositionEffect_Open,
+        )
+        return orders
+
+    def order_market_close(
+        self,
+        code: str,
+        price: float,
+        volume: int,
+        remark: str,
+        strategy_name: str = 'non-name',
+    ):
+        print(f'[{remark}]{code}')
+        if self.ding_messager is not None:
+            self.ding_messager.send_text(
+                f'[{self.account_id}]{strategy_name}:{remark}\n'
+                f'{code}委卖{volume}股{price:.2f}元',
+                '')
+
+        orders = order_volume(
+            symbol=code_to_gmsymbol(code),
+            price=price,
+            volume=volume,
+            side=OrderSide_Sell,
+            order_type=OrderType_Market,
+            order_qualifier=OrderQualifier_B5TC,
+            position_effect=PositionEffect_Close,
+        )
+        return orders
+
+    def order_limit_open(
+        self,
+        code: str,
+        price: float,
+        volume: int,
+        remark: str,
+        strategy_name: str = 'non-name',
+    ):
+        """
+        [
+            account_id: "189ca421-49db-11ef-9fa8-00163e022aa6"
+            cl_ord_id: "83fe1b04-4afa-11ef-97f5-00163e022aa6"
+            order_id: "83fe1b0b-4afa-11ef-97f5-00163e022aa6"
+            ex_ord_id: "83fe1b0b-4afa-11ef-97f5-00163e022aa6"
+            symbol: "SHSE.600000"
+            side: 1
+            position_effect: 1
+            order_type: 2
+            order_qualifier: 3
+            status: 1
+            order_style: 1
+            volume: 100
+            created_at {
+              seconds: 1721962528
+              nanos: 852249292
+            }
+            updated_at {
+              seconds: 1721962528
+              nanos: 852249292
+            }
+        ]
+        """
+        print(f'[{remark}]{code}')
+        if self.ding_messager is not None:
+            self.ding_messager.send_text(
+                f'[{self.account_id}]{strategy_name}:{remark}\n'
+                f'{code}委买{volume}股{price:.2f}元',
+                '')
+
+        orders = order_volume(
+            symbol=code_to_gmsymbol(code),
+            price=price,
+            volume=volume,
+            side=OrderSide_Buy,
+            order_type=OrderType_Limit,
+            position_effect=PositionEffect_Open,
+        )
+        return orders
+
+    def order_limit_close(
+        self,
+        code: str,
+        price: float,
+        volume: int,
+        remark: str,
+        strategy_name: str = 'non-name',
+    ):
+        print(f'[{remark}]{code}')
+        if self.ding_messager is not None:
+            self.ding_messager.send_text(
+                f'[{self.account_id}]{strategy_name}:{remark}\n'
+                f'{code}委卖{volume}股{price:.2f}元',
+                '')
+
+        orders = order_volume(
+            symbol=code_to_gmsymbol(code),
+            price=price,
+            volume=volume,
+            side=OrderSide_Sell,
+            order_type=OrderType_Limit,
+            position_effect=PositionEffect_Close,
+        )
+        return orders
+
+
+def is_position_holding(position: GmPosition) -> bool:
+    return position.volume > 0
+
+
+def get_holding_position_count(positions: List[GmPosition]) -> int:
+    return sum(1 for position in positions if is_position_holding(position))

@@ -1,8 +1,8 @@
-beautifulsoup4==4.12.2
-certifi==2023.7.22
-charset-normalizer==3.2.0
-idna==3.4
-requests==2.31.0
-six==1.16.0
-soupsieve==2.5
-urllib3==2.0.5
+akshare~=1.14.13
+gmtrade~=3.0.6
+numpy~=1.23.5
+pandas~=2.2.2
+pywencai~=0.12.2
+schedule==1.2.1
+typing~=3.7.4.3
+requests~=2.31.0

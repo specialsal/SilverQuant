@@ -174,3 +174,5 @@ _cache/staging_hma/
 _cache/prod_pwc/
 _cache/staging_pwc/
 
+# credential
+credentials.py
