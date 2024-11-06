@@ -163,16 +163,8 @@ cython_debug/
 # project only
 *.dmp
 
-_cache/staging_sma/
-
-_cache/prod_dk/
-_cache/staging_dk/
-
-_cache/prod_hma/
-_cache/staging_hma/
-
-_cache/prod_pwc/
-_cache/staging_pwc/
+#_cache/prod_pwc/
+#_cache/staging_pwc/
 
 # credential
 credentials.py

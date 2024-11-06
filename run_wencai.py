@@ -51,7 +51,7 @@ class PoolParameters:
 
 
 class BuyParameters:
-    time_ranges = []
+    time_ranges = [['10:30', '11:30'], ['13:00', '14:57']]
     interval = 15           # 扫描买入间隔，60的约数：1-6, 10, 12, 15, 20, 30
     order_premium = 0.02    # 保证市价单成交的溢价，单位（元）
 
