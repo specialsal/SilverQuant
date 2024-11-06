@@ -4,7 +4,6 @@ https://www.iwencai.com/
 import pywencai
 
 query_1 = '，'.join([
-    '向上突破10日均线',
     '量比大于1.8',
     '大单净量大于0.0',
     '主板',
@@ -26,7 +25,7 @@ query_2 = '，'.join([
     '上市时间大于100天',
 ])
 
-select_query = query_2
+select_query = '主板，非st，roe大于10%，市值大于50亿，股价低于90，向上突破60日均线'
 print(select_query, '\n')
 
 
@@ -34,8 +33,22 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
     df = pywencai.get(query=query)
 
     if df is not None and type(df) != dict and df.shape[0] > 0:
-        # target_col = f'收盘价:不复权[{datetime.datetime.now().strftime("%Y%m%d")}]'
-        target_col = '最新价'
+        possible_price_columns = [
+            '现价(元)',
+            '最新价',
+            f'收盘价:不复权[{datetime.datetime.now().strftime("%Y%m%d")}]',
+            f'收盘价:不复权(元)[{datetime.datetime.now().strftime("%Y%m%d")}]',
+        ]
+
+        target_col = None
+
+        for temp_col in possible_price_columns:
+            if temp_col in df.columns:
+                target_col = temp_col
+                break
+
+        if target_col == None:
+            return {}
 
         df['最新价'] = df[target_col].astype(float)
         if debugging:
