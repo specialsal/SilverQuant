@@ -1,6 +1,7 @@
 """
 https://www.iwencai.com/
 """
+import datetime
 import pywencai
 
 query_1 = '，'.join([
@@ -61,7 +62,6 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
 
 
 if __name__ == '__main__':
-    import datetime
     from tools.utils_basic import pd_show_all
     pd_show_all()
 
