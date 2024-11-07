@@ -19,14 +19,22 @@ class BaseSeller:
         # TODO: 20cm
         if volume > 0:
             order_price = quote['lastPrice'] - self.order_premium
-            order_price = max(order_price, get_limit_down_price(code, quote['lastClose']))
-
-            self.delegate.order_market_close(
-                code=code,
-                price=order_price,
-                volume=volume,
-                remark=remark,
-                strategy_name=self.strategy_name)
+            limit_price = get_limit_down_price(code, quote['lastClose'])
+            if order_price < limit_price:
+                # 如果跌停了只能挂限价单
+                self.delegate.order_limit_close(
+                    code=code,
+                    price=limit_price,
+                    volume=volume,
+                    remark=remark,
+                    strategy_name=self.strategy_name)
+            else:
+                self.delegate.order_market_close(
+                    code=code,
+                    price=order_price,
+                    volume=volume,
+                    remark=remark,
+                    strategy_name=self.strategy_name)
 
             if log:
                 logging.warning(f'{remark} {code}\t现价:{order_price:.3f} {volume}股')
@@ -41,7 +49,7 @@ class BaseSeller:
                     remark=remark)
 
         else:
-            print(f'{code} 挂单量为0，不委托')
+            print(f'{code} 挂单卖量为0，不委托')
 
     def execute_sell(
         self,

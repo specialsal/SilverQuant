@@ -309,6 +309,9 @@ def update_position_held(lock: threading.Lock, delegate: XtDelegate, path: str):
         position_codes = [position.stock_code for position in positions]
         holding_codes = list(held_days.keys())
         for code in holding_codes:
+            if code[0] == '_':
+                continue
+
             if code not in position_codes:
                 del held_days[code]
 
