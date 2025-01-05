@@ -198,7 +198,7 @@ def time_diff_seconds(later_time: datetime.datetime.time, early_time: datetime.d
     total_seconds_time2 = early_time.hour * 3600 + early_time.minute * 60 + early_time.second
 
     # 计算两个时间之间的秒数差
-    diff_seconds = total_seconds_time1 - total_seconds_time2
+    diff_seconds = abs(total_seconds_time1 - total_seconds_time2)
 
     return diff_seconds
 

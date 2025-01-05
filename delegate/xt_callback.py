@@ -6,7 +6,7 @@ from xtquant import xtconstant
 from xtquant.xttrader import XtQuantTraderCallback
 from xtquant.xttype import XtOrder, XtTrade, XtOrderError, XtCancelError, XtOrderResponse, XtCancelOrderResponse
 
-from tools.utils_cache import record_deal, new_held, del_key, get_stock_codes_and_names
+from tools.utils_cache import record_deal, new_held, del_key, StockNames
 from tools.utils_ding import DingMessager
 
 
@@ -85,18 +85,15 @@ class XtCustomCallback(XtBaseCallback):
         self.path_held = path_held
         self.path_maxp = path_maxp
 
-        self.code_name = get_stock_codes_and_names()
+        self.stock_names = StockNames()
 
     def record_order(self, order_time: str, code: str, price: float, volume: int, side: str, remark: str):
-        if code not in self.code_name:
-            print(f'找不到{code}对应的名字无法记录!')
-
         record_deal(
             lock=self.lock_of_disk_cache,
             path=self.path_deal,
             timestamp=order_time,
             code=code,
-            name=self.code_name[code],
+            name=self.stock_names.get_name(code),
             order_type=side,
             remark=remark,
             price=round(price, 2),
@@ -123,10 +120,10 @@ class XtCustomCallback(XtBaseCallback):
             #     remark=order_remark,
             # )
 
-            name = self.code_name[stock_code] if stock_code in self.code_name else '(Unknown)'
+            name = self.stock_names.get_name(stock_code)
             self.ding_messager.send_text(
                 f'[{self.account_id}]{self.strategy_name} {order_remark}\n'
-                f'{datetime.datetime.now().strftime("%H:%M:%S")} 卖出成交 {stock_code}\n'
+                f'{datetime.datetime.now().strftime("%H:%M:%S")} 卖成 {stock_code}\n'
                 f'{name} {traded_volume}股 {traded_price:.2f}元',
                 '[SELL]')
             return
@@ -143,19 +140,30 @@ class XtCustomCallback(XtBaseCallback):
             #     remark=order_remark,
             # )
 
-            name = self.code_name[stock_code] if stock_code in self.code_name else '(Unknown)'
+            name = self.stock_names.get_name(stock_code)
             self.ding_messager.send_text(
                 f'[{self.account_id}]{self.strategy_name} {order_remark}\n'
-                f'{datetime.datetime.now().strftime("%H:%M:%S")} 买入成交 {stock_code}\n'
+                f'{datetime.datetime.now().strftime("%H:%M:%S")} 买成 {stock_code}\n'
                 f'{name} {traded_volume}股 {traded_price:.2f}元',
                 '[BUY]')
             return
 
-
     def on_order_stock_async_response(self, res: XtOrderResponse):
-        log = f'异步委托回调 id:{res.order_id} sysid:{res.error_msg} remark:{res.order_remark}',
+        log = f'异步下单委托 {res.order_id} msg:{res.error_msg} remark:{res.order_remark}',
         logging.warning(log)
 
     def on_order_error(self, err: XtOrderError):
-        log = f'委托报错 id:{err.order_id} error_id:{err.error_id} error_msg:{err.error_msg}'
+        log = f'异步下单出错 {err.order_id} msg:{err.error_msg} remark:{err.order_remark} '
+        logging.warning(log)
+
+    def on_cancel_order_stock_async_response(self, res: XtCancelOrderResponse):
+        log = f'异步撤单委托 {res.order_id} msg:{res.error_msg} result:{res.cancel_result} ',
+        logging.warning(log)
+        self.ding_messager.send_text(
+            f'[{self.account_id}]{self.strategy_name} 低封撤单\n'
+            f'{datetime.datetime.now().strftime("%H:%M:%S")} 撤成\n'
+            '[CANCEL]')
+
+    def on_cancel_error(self, cancel_error: XtCancelError):
+        log = f'异步撤单出错 {cancel_error.order_id} msg:{cancel_error.error_msg}',
         logging.warning(log)

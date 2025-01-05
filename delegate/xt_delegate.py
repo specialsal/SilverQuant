@@ -3,6 +3,7 @@ from threading import Thread
 from typing import List
 
 from xtquant import xtconstant
+from xtquant.xtconstant import STOCK_BUY, STOCK_SELL
 from xtquant.xtdata import get_client, get_full_tick
 from xtquant.xttrader import XtQuantTrader
 from xtquant.xttype import StockAccount, XtPosition, XtOrder, XtAsset
@@ -174,38 +175,6 @@ class XtDelegate(BaseDelegate):
         else:
             raise Exception('xt_trader为空')
 
-    # def order_send(
-    #     self,
-    #     order_type: int,
-    #     code: str,
-    #     curr_price: float,
-    #     order_volume: int,
-    #     order_remark: str,
-    #     order_premium: float = 0.01,
-    #     strategy_name: str = 'No Name',
-    # ):
-    #     price_type = xtconstant.LATEST_PRICE
-    #     price = -1
-    #     if get_code_exchange(code) == 'SZ':
-    #         price_type = xtconstant.MARKET_SZ_CONVERT_5_CANCEL
-    #         price = -1
-    #     if get_code_exchange(code) == 'SH':
-    #         price_type = xtconstant.MARKET_PEER_PRICE_FIRST
-    #         if order_type == xtconstant.STOCK_SELL:
-    #             price = curr_price - order_premium
-    #         elif order_type == xtconstant.STOCK_BUY:
-    #             price = curr_price + order_premium
-    #
-    #     self.order_submit(
-    #         stock_code=code,
-    #         order_type=order_type,
-    #         order_volume=order_volume,
-    #         price_type=price_type,
-    #         price=price,
-    #         strategy_name=strategy_name,
-    #         order_remark=order_remark,
-    #     )
-
     def order_market_open(
         self,
         code: str,
@@ -296,6 +265,29 @@ class XtDelegate(BaseDelegate):
             order_remark=remark,
         )
 
+    # # 已报
+    # ORDER_REPORTED = 50
+    # # 已报待撤
+    # ORDER_REPORTED_CANCEL = 51
+    # # 部成待撤
+    # ORDER_PARTSUCC_CANCEL = 52
+    # # 部撤
+    # ORDER_PART_CANCEL = 53
+
+    def order_cancel_all_buy(self, code: str):
+        orders = self.check_orders()
+        for order in orders:
+            if order.stock_code == code and order.order_type == STOCK_BUY:
+                if order.order_status in [50, 51, 52, 53]:
+                    self.order_cancel_async(order.order_id)
+
+    def order_cancel_all_sell(self, code: str):
+        orders = self.check_orders()
+        for order in orders:
+            if order.stock_code == code and order.order_type == STOCK_SELL:
+                if order.order_status in [50, 51, 52, 53]:
+                    self.order_cancel_async(order.order_id)
+
 
 def is_position_holding(position: XtPosition) -> bool:
     return position.volume > 0
@@ -320,7 +312,7 @@ def xt_get_ticks(code_list: list[str]):
 
 
 if __name__ == '__main__':
-    # xt_delegate = XtDelegate()
-    # xt_delegate.xt_trader.run_forever()
-    # xt_delegate.xt_trader.stop()
+    # my_delegate = XtDelegate()
+    # my_delegate.xt_trader.run_forever()
+    # my_delegate.xt_trader.stop()
     print(xt_get_ticks(['000001.SZ']))

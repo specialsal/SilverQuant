@@ -1,4 +1,4 @@
-# 安装说明
+# 客户端安装说明
 
 ## 1. 软件下载
 
@@ -10,12 +10,9 @@
 > 
 > https://www.jetbrains.com/pycharm/download/?section=windows
 
-> 下载 Node.JS 版本大于v20
-> 
-> https://nodejs.org/zh-cn
 
 > 下载国金证券的券商版 QMT（推荐国金证券 QMT，用其他券商QMT可以下载他们对应版本的 QMT）
->
+> 
 > WinRAR下载 https://www.win-rar.com/start.html?&L=0
 > 
 > QMT 实盘 https://download.gjzq.com.cn/gjty/organ/gjzqqmt.rar
@@ -25,6 +22,10 @@
 > 下载掘金3的仿真交易软件（如果需要模拟盘的话）
 > 
 > https://www.myquant.cn/terminal
+
+> 下载 Node.JS 版本大于v20（如果需要问财大模型相关功能）
+> 
+> https://nodejs.org/zh-cn 
 
 ## 2. 配置环境
 
@@ -53,10 +54,6 @@
 > 4) http://mirrors.aliyun.com/pypi/simple/ 阿里云
 > 5) http://pypi.douban.com/simple/ 豆瓣
 
-安装 ta-lib
-
-> 继续输入 pip install _wheel/TA_Lib-0.4.24-cp310-cp310-win_amd64.whl
-
 ## 3. 启动程序
 
 启动QMT交易软件
@@ -77,10 +74,10 @@
 
 > PyCharm 中打开ProjectQ项目根目录
 > 
-> 1. 找到 run_remote.py 文件，根目录下
+> 1. 找到 run_xxxxxx.py 文件，根目录下
 > 2. 找到 IS_PROD = False 代码处，将 False 改为 True 切换成实盘
 > 3. 确认 QMT 交易软件正在运行
-> 4. 启动 run_remote.py 文件，点击绿色小三角
+> 4. 启动 run_xxxxxx.py 文件，点击绿色小三角
 
 参数配置
 
@@ -98,7 +95,6 @@ Buy Parameters 买点相关的参数
 > * order_premium 保证市价单成交的溢价，单位（元）
 > 
 > 其他看代码中详细说明
-
 
 Sell Parameters 卖点相关的参数
 

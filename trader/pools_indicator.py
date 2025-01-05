@@ -1,5 +1,4 @@
 import datetime
-import talib as ta
 import akshare as ak
 
 from mytt.MyTT_advance import *
@@ -18,7 +17,7 @@ def get_ma_trend_indicator(
         end_date=end_dt.strftime('%Y%m%d'),
     )
     close = df['收盘'].values
-    df['MA5'] = ta.MA(close, p)
+    df['MA5'] = MA(close, p)
     df['SAFE'] = df['MA5'] < df['收盘']
     return df['SAFE'].values[-1], {'df': df}
 
@@ -46,13 +45,12 @@ def get_macd_trend_indicator(
     # macd = MACD(CLOSE, 10, 22, 7)
     # print(macd)
 
-    df['DIF'], df['DEA'], df['MACD'] = ta.MACD(
+    _, _, df['MACD'] = MACD(
         close,
-        fastperiod=fp,
-        slowperiod=sp,
-        signalperiod=ap,
+        SHORT=fp,
+        LONG=sp,
+        M=ap,
     )
-    df['MACD'] = df['MACD'] * 2
     df['SLOPE'] = SLOPE(df['MACD'], sa)
     df['SAFE'] = (df['MACD'] > 0) & (df['SLOPE'] > 0) | (df['SLOPE'] > 8)
 

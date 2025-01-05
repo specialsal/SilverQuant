@@ -1,5 +1,7 @@
 import pandas as pd
-import talib as ta
+
+from mytt.MyTT_custom import *
+from mytt.MyTT_advance import *
 from typing import Dict, Optional
 
 from xtquant.xttype import XtPosition
@@ -30,10 +32,10 @@ class HardSeller(BaseSeller):
             switch_lower = cost_price * (self.risk_limit + held_day * self.risk_tight)
 
             if curr_price <= switch_lower:
-                self.order_sell(code, quote, sell_volume, '绝对止损')
+                self.order_sell(code, quote, sell_volume, f'硬止损{int((1 - self.risk_limit) * 100)}%')
                 return True
             elif curr_price >= cost_price * self.earn_limit:
-                self.order_sell(code, quote, sell_volume, '绝对止盈')
+                self.order_sell(code, quote, sell_volume, f'硬止盈{int((self.earn_limit - 1) * 100)}%')
                 return True
 
 
@@ -210,8 +212,8 @@ class MASeller(BaseSeller):
                     'amount': quote['amount'],
                 }, ignore_index=True)
 
-                ma_values = ta.MA(df.close.tail(self.ma_above + 1), timeperiod=self.ma_above)
-                ma_value = ma_values.values[-1]
+                ma_values = MA(df.close.tail(self.ma_above + 1), self.ma_above)
+                ma_value = ma_values[-1]
 
                 if curr_price < ma_value - 0.01:
                     self.order_sell(code, quote, sell_volume, '破均卖单')
@@ -251,7 +253,7 @@ class CCISeller(BaseSeller):
                     'amount': quote['amount'],
                 }, ignore_index=True)
 
-                df['CCI'] = ta.CCI(df['high'], df['low'], df['close'], timeperiod=14)
+                df['CCI'] = CCI(df['close'], df['high'], df['low'], 14)
                 cci = df['CCI'].tail(2).values
 
                 if cci[0] > self.cci_lower > cci[1]:  # CCI 下穿
@@ -260,6 +262,46 @@ class CCISeller(BaseSeller):
 
                 if cci[0] < self.cci_upper < cci[1]:  # CCI 上穿
                     self.order_sell(code, quote, sell_volume, '高CCI卖')
+                    return True
+
+        return False
+
+
+# ================================
+# WR上穿卖出
+# ================================
+class WRSeller(BaseSeller):
+    def __init__(self, strategy_name, delegate, parameters):
+        BaseSeller.__init__(self, strategy_name, delegate, parameters)
+
+        print('WR上穿卖出策略', end=' ')
+        self.wr_cross = parameters.wr_cross
+
+    def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
+                   held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
+
+        if history is not None:
+            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 CCI 卖出
+                sell_volume = position.can_use_volume
+
+                curr_price = quote['lastPrice']
+                curr_vol = quote['volume']
+
+                df = history._append({
+                    'datetime': curr_date,
+                    'open': quote['open'],
+                    'high': quote['high'],
+                    'low': quote['low'],
+                    'close': curr_price,
+                    'volume': curr_vol,
+                    'amount': quote['amount'],
+                }, ignore_index=True)
+
+                df['WR'] = WR(df['close'], df['high'], df['low'], 14)
+                wr = df['WR'].tail(2).values
+
+                if wr[0] < self.wr_cross < wr[1]:  # WR 上穿
+                    self.order_sell(code, quote, sell_volume, 'WR上穿卖')
                     return True
 
         return False
@@ -300,8 +342,48 @@ class VolumeDropSeller(BaseSeller):
 
 
 # ================================
-# 三倍量当天最低止损
+# 双涨趋势阻断器
 # ================================
-# TODO
+
+class UppingBlocker(BaseSeller):
+    def __init__(self, strategy_name, delegate, parameters):
+        BaseSeller.__init__(self, strategy_name, delegate, parameters)
+
+        print('上行趋势禁卖阻断', end=' ')
 
 
+    def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
+                   held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
+
+        if history is not None:
+            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 CCI 卖出
+                sell_volume = position.can_use_volume
+
+                curr_price = quote['lastPrice']
+                curr_vol = quote['volume']
+
+                df = history._append({
+                    'datetime': curr_date,
+                    'open': quote['open'],
+                    'high': quote['high'],
+                    'low': quote['low'],
+                    'close': curr_price,
+                    'volume': curr_vol,
+                    'amount': quote['amount'],
+                }, ignore_index=True)
+
+                _, _, df['MACD'] = MACD(df['close'])
+                macd = df['MACD'].tail(2).values
+
+                close = df['close'].tail(2).values
+                high = df['high'].tail(2).values
+                low = df['low'].tail(2).values
+
+                yesterday_price = close[0] + high[0] + low[0]
+                today_price = close[1] + high[1] + low[1]
+
+                if macd[0] < macd[1] and yesterday_price < today_price:  # macd上行 & 价格上行
+                    # self.order_sell(code, quote, sell_volume, '上行不卖')
+                    return True
+
+        return False

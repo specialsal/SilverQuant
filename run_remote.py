@@ -13,14 +13,14 @@ from delegate.xt_delegate import xt_get_ticks
 from delegate.xt_subscriber import XtSubscriber, update_position_held
 
 from trader.buyer import BaseBuyer as Buyer
-from trader.pools import StocksPoolWhiteIndexes as Pool
+from trader.pools import StocksPoolBlackEmpty as Pool
 from trader.seller_groups import LTT2GroupSeller as Seller
 
 from tools.utils_remote import pull_stock_codes
 
 # ======== 配置 ========
 
-STRATEGY_NAME = '龙运远程'
+STRATEGY_NAME = '远程龙运'
 SELECTION_ID = 'LTT2'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
 IS_PROD = True
@@ -45,26 +45,16 @@ def debug(*args):
         print(*args)
 
 
-class PoolParameters:
-    white_indexes = [
-        IndexSymbol.INDEX_HS_300,
-        IndexSymbol.INDEX_ZZ_500,
-        IndexSymbol.INDEX_ZZ_1000,
-        IndexSymbol.INDEX_ZZ_2000,
-    ]
-    black_queries = [
-        'ST',
-        '退市',
-    ]
-    day_count = 110         # 70个足够算出周期为60的均线数据
+class PoolConf:
+    day_count = 100         # 100个自然日里有 > 60个交易日
     price_adjust = 'qfq'    # 历史价格复权
     columns = ['datetime', 'open', 'high', 'low', 'close', 'volume', 'amount']
 
 
-class BuyParameters:
-    time_ranges = [['14:30', '14:57']]
+class BuyConf:
+    time_ranges = [['14:45', '14:57']]
     interval = 15
-    order_premium = 0.08    # 保证成功买入成交的溢价
+    order_premium = 0.05    # 保证成功买入成交的溢价
 
     slot_count = 20         # 持股数量上限
     slot_capacity = 30000   # 每个仓的资金上限
@@ -74,10 +64,10 @@ class BuyParameters:
     inc_limit = 1.20        # 相对于昨日收盘的涨幅限制
 
 
-class SellParameters:
+class SellConf:
     time_ranges = [['09:31', '11:30'], ['13:00', '14:57']]
     interval = 5
-    order_premium = 0.06            # 保证成功卖出成交的溢价
+    order_premium = 0.05            # 保证成功卖出成交的溢价
 
     switch_hold_days = 5            # 持仓天数
     switch_demand_daily_up = 0.003  # 换仓上限乘数
@@ -88,16 +78,17 @@ class SellParameters:
     risk_tight = 0.002              # 硬性止损率每日上移
 
     return_of_profit = [            # 至少保留收益范围
-        (1.07, 9.99, 0.33),
-        (1.03, 1.07, 0.66),
+        (1.16, 9.99, 0.16),
+        (1.06, 1.16, 0.33),
+        (1.015, 1.06, 0.66),
     ]
 
-    cci_upper = 310.0               # cci 高卖点阈值
+    cci_upper = 320.0               # cci 高卖点阈值
     cci_lower = 10.0                # cci 低卖点阈值
 
     open_low_rate = 0.99            # 低于开仓日最低价比例
     open_vol_rate = 0.60            # 低于开仓日成交量比例
-    tail_vol_time = '14:45'         # 低于开仓日成交量执行时间
+    tail_vol_time = '14:40'         # 低于开仓日成交量执行时间
 
     ma_above = 20                   # 跌破N日均线卖出
 
@@ -109,7 +100,7 @@ def held_increase() -> None:
     if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
 
-    update_position_held(lock_of_disk_cache, xt_delegate, PATH_HELD)
+    update_position_held(lock_of_disk_cache, my_delegate, PATH_HELD)
     if all_held_inc(lock_of_disk_cache, PATH_HELD):
         logging.warning('===== 所有持仓计数 +1 =====')
         print(f'All held stock day +1!')
@@ -120,7 +111,7 @@ def refresh_code_list():
         return
 
     my_pool.refresh()
-    positions = xt_delegate.check_positions()
+    positions = my_delegate.check_positions()
     hold_list = [position.stock_code for position in positions if is_stock(position.stock_code)]
     my_suber.update_code_list(my_pool.get_code_list() + hold_list)
 
@@ -133,11 +124,11 @@ def prepare_history() -> None:
     curr_date = now.strftime('%Y-%m-%d')
     cache_path = PATH_INFO.format(curr_date)
 
-    start = get_prev_trading_date(now, PoolParameters.day_count)
+    start = get_prev_trading_date(now, PoolConf.day_count)
     end = get_prev_trading_date(now, 1)
 
     # 只有持仓列表
-    positions = xt_delegate.check_positions()
+    positions = my_delegate.check_positions()
     holding_list = [position.stock_code for position in positions if is_stock(position.stock_code)]
 
     my_suber.download_cache_history(
@@ -145,8 +136,8 @@ def prepare_history() -> None:
         code_list=holding_list,
         start=start,
         end=end,
-        adjust=PoolParameters.price_adjust,
-        columns=PoolParameters.columns,
+        adjust=PoolConf.price_adjust,
+        columns=PoolConf.columns,
     )
 
 
@@ -161,13 +152,13 @@ def check_stock_codes(selected_codes: list[str], quotes: Dict,) -> List[Dict[str
             debug(code, f'本次quotes没数据')
             continue
 
-        if code not in my_pool.cache_whitelist:
-            debug(code, f'不在白名单')
-            continue
+        # if code not in my_pool.cache_whitelist:
+        #     debug(code, f'不在白名单')
+        #     continue
 
-        if code in my_pool.cache_blacklist:
-            debug(code, f'在黑名单')
-            continue
+        # if code in my_pool.cache_blacklist:
+        #     debug(code, f'在黑名单')
+        #     continue
 
         quote = quotes[code]
 
@@ -175,15 +166,19 @@ def check_stock_codes(selected_codes: list[str], quotes: Dict,) -> List[Dict[str
         # curr_open = quote['open']
         curr_price = quote['lastPrice']
 
-        if not curr_price > BuyParameters.min_price:
-            debug(code, f'价格小于{BuyParameters.min_price}')
+        if not curr_price > BuyConf.min_price:
+            debug(code, f'价格小于{BuyConf.min_price}')
             continue
 
-        # if not curr_open < curr_price < prev_close * BuyParameters.inc_limit:
-        #     debug(code, f'涨幅不符合区间 {curr_open} < {curr_price} < {prev_close * BuyParameters.inc_limit}')
+        # if not curr_open < curr_price < prev_close * BuyConf.inc_limit:
+        #     debug(code, f'涨幅不符合区间 {curr_open} < {curr_price} < {prev_close * BuyConf.inc_limit}')
         #     continue
 
-        selection = {'code': code, 'price': quote['lastPrice'], 'lastClose': quote['lastClose']}
+        selection = {
+            'code': code,
+            'price': round(max(quote['askPrice'] + [curr_price]), 2),
+            'lastClose': round(quote['lastClose'], 2),
+        }
         selections.append(selection)
 
     return selections
@@ -205,13 +200,13 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
     if len(selections) > 0:
         position_codes = [position.stock_code for position in positions]
         position_count = get_holding_position_count(positions)
-        available_cash = xt_delegate.check_asset().cash
-        available_slot = available_cash // BuyParameters.slot_capacity
+        available_cash = my_delegate.check_asset().cash
+        available_slot = available_cash // BuyConf.slot_capacity
 
-        buy_count = max(0, BuyParameters.slot_count - position_count)   # 确认剩余的仓位
-        buy_count = min(buy_count, available_slot)                      # 确认现金够用
-        buy_count = min(buy_count, len(selections))                     # 确认选出的股票够用
-        buy_count = min(buy_count, BuyParameters.once_buy_limit)        # 限制一秒内下单数量
+        buy_count = max(0, BuyConf.slot_count - position_count)     # 确认剩余的仓位
+        buy_count = min(buy_count, available_slot)                  # 确认现金够用
+        buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
+        buy_count = min(buy_count, BuyConf.once_buy_limit)          # 限制一秒内下单数量
         buy_count = int(buy_count)
 
         for i in range(len(selections)):  # 依次买入
@@ -220,7 +215,7 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
                 code = selections[i]['code']
                 price = selections[i]['price']
                 last_close = selections[i]['lastClose']
-                buy_volume = math.floor(BuyParameters.slot_capacity / price / 100) * 100
+                buy_volume = math.floor(BuyConf.slot_capacity / price / 100) * 100
 
                 if buy_volume <= 0:
                     debug(f'{code} 不够一手')
@@ -231,7 +226,8 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
                 else:
                     buy_count = buy_count - 1
                     # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
-                    my_buyer.order_buy(code=code, price=price, last_close=last_close, volume=buy_volume, remark='选股买单')
+                    my_buyer.order_buy(code=code, price=price, last_close=last_close,
+                                       volume=buy_volume, remark='市价买入')
             else:
                 break
 
@@ -257,16 +253,16 @@ def scan_sell(quotes: Dict, curr_date: str, curr_time: str, positions: List) -> 
 
 
 def execute_strategy(curr_date: str, curr_time: str, curr_seconds: str, curr_quotes: Dict) -> bool:
-    positions = xt_delegate.check_positions()
+    positions = my_delegate.check_positions()
 
-    for time_range in SellParameters.time_ranges:
+    for time_range in SellConf.time_ranges:
         if time_range[0] <= curr_time <= time_range[1]:
-            if int(curr_seconds) % SellParameters.interval == 0:
+            if int(curr_seconds) % SellConf.interval == 0:
                 scan_sell(curr_quotes, curr_date, curr_time, positions)
 
-    for time_range in BuyParameters.time_ranges:
+    for time_range in BuyConf.time_ranges:
         if time_range[0] <= curr_time <= time_range[1]:
-            if int(curr_seconds) % BuyParameters.interval == 0:
+            if int(curr_seconds) % BuyConf.interval == 0:
                 scan_buy(curr_quotes, curr_date, positions)
                 return True
 
@@ -275,12 +271,12 @@ def execute_strategy(curr_date: str, curr_time: str, curr_seconds: str, curr_quo
 
 if __name__ == '__main__':
     logging_init(path=PATH_LOGS, level=logging.INFO)
-
+    print(f'正在启动 {STRATEGY_NAME}{"" if IS_PROD else "(模拟)"}...')
     if IS_PROD:
         from delegate.xt_callback import XtCustomCallback
         from delegate.xt_delegate import XtDelegate, get_holding_position_count
 
-        xt_callback = XtCustomCallback(
+        my_callback = XtCustomCallback(
             account_id=QMT_ACCOUNT_ID,
             strategy_name=STRATEGY_NAME,
             ding_messager=DING_MESSAGER,
@@ -289,16 +285,16 @@ if __name__ == '__main__':
             path_held=PATH_HELD,
             path_maxp=PATH_MAXP,
         )
-        xt_delegate = XtDelegate(
+        my_delegate = XtDelegate(
             account_id=QMT_ACCOUNT_ID,
             client_path=QMT_CLIENT_PATH,
-            callback=xt_callback,
+            callback=my_callback,
         )
     else:
         from delegate.gm_callback import GmCallback
         from delegate.gm_delegate import GmDelegate, get_holding_position_count
 
-        xt_callback = GmCallback(
+        my_callback = GmCallback(
             account_id=QMT_ACCOUNT_ID,
             strategy_name=STRATEGY_NAME,
             ding_messager=DING_MESSAGER,
@@ -307,33 +303,33 @@ if __name__ == '__main__':
             path_held=PATH_HELD,
             path_maxp=PATH_MAXP,
         )
-        xt_delegate = GmDelegate(
+        my_delegate = GmDelegate(
             account_id=QMT_ACCOUNT_ID,
-            callback=xt_callback,
+            callback=my_callback,
             ding_messager=DING_MESSAGER,
         )
 
     my_pool = Pool(
         account_id=QMT_ACCOUNT_ID,
         strategy_name=STRATEGY_NAME,
-        parameters=PoolParameters,
+        parameters=PoolConf,
         ding_messager=DING_MESSAGER,
     )
     my_buyer = Buyer(
         account_id=QMT_ACCOUNT_ID,
         strategy_name=STRATEGY_NAME,
-        delegate=xt_delegate,
-        parameters=BuyParameters,
+        delegate=my_delegate,
+        parameters=BuyConf,
     )
     my_seller = Seller(
         strategy_name=STRATEGY_NAME,
-        delegate=xt_delegate,
-        parameters=SellParameters,
+        delegate=my_delegate,
+        parameters=SellConf,
     )
     my_suber = XtSubscriber(
         account_id=QMT_ACCOUNT_ID,
         strategy_name=STRATEGY_NAME,
-        delegate=xt_delegate,
+        delegate=my_delegate,
         path_deal=PATH_DEAL,
         path_assets=PATH_ASSETS,
         execute_strategy=execute_strategy,
@@ -346,16 +342,16 @@ if __name__ == '__main__':
     temp_time = temp_now.strftime('%H:%M')
 
     # 定时任务启动
-    schedule.every().day.at('09:00').do(held_increase)
-    schedule.every().day.at('09:00').do(refresh_code_list)
-    schedule.every().day.at('09:05').do(prepare_history)    # 必须先 refresh code list
+    schedule.every().day.at('09:10').do(held_increase)
+    schedule.every().day.at('09:11').do(refresh_code_list)
+    schedule.every().day.at('09:15').do(prepare_history)    # 必须先 refresh code list
 
-    if '09:05' < temp_time < '15:30' and check_today_is_open_day(temp_date):
+    if '09:10' < temp_time < '15:30' and check_today_is_open_day(temp_date):
         held_increase()
         refresh_code_list()
         prepare_history()  # 重启时防止没有数据在这先加载历史数据
 
-        if '09:15' <= temp_time <= '11:30' or '13:00' <= temp_time <= '14:57':
+        if '09:30' <= temp_time <= '11:30' or '13:00' <= temp_time <= '14:57':
             my_suber.subscribe_tick()  # 重启时如果在交易时间则订阅Tick
 
     try:
@@ -364,4 +360,4 @@ if __name__ == '__main__':
             time.sleep(1)
     finally:
         schedule.clear()
-        xt_delegate.shutdown()
+        my_delegate.shutdown()

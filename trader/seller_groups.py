@@ -42,6 +42,7 @@ class ShieldGroupSeller(GroupSellers, HardSeller, FallSeller, ReturnSeller):
         self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
 
 
+# 龙抬头
 class LTT2GroupSeller(GroupSellers, HardSeller, OpenDaySeller, SwitchSeller, ReturnSeller, CCISeller, MASeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
@@ -51,6 +52,7 @@ class LTT2GroupSeller(GroupSellers, HardSeller, OpenDaySeller, SwitchSeller, Ret
         self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
 
 
+# 三倍量突破
 class T3BLGroupSeller(GroupSellers, HardSeller, SwitchSeller, FallSeller, MASeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
@@ -60,7 +62,28 @@ class T3BLGroupSeller(GroupSellers, HardSeller, SwitchSeller, FallSeller, MASell
         self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
 
 
+# 超跌倍量
 class CDBLGroupSeller(GroupSellers, HardSeller, SwitchSeller, FallSeller):
+    def __init__(self, strategy_name, delegate, parameters):
+        super().__init__()
+        self.group_init(strategy_name, delegate, parameters)
+
+    def check_sell(self, code, quote, curr_date, curr_time, position, held_day, max_price, history):
+        self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
+
+
+# 平台绿缩
+class PTLSGroupSeller(GroupSellers, HardSeller, UppingBlocker, FallSeller, ReturnSeller, SwitchSeller, MASeller):
+    def __init__(self, strategy_name, delegate, parameters):
+        super().__init__()
+        self.group_init(strategy_name, delegate, parameters)
+
+    def check_sell(self, code, quote, curr_date, curr_time, position, held_day, max_price, history):
+        self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
+
+
+# 金雀突破
+class JQTPGroupSeller(GroupSellers, HardSeller, WRSeller, UppingBlocker, FallSeller, ReturnSeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
         self.group_init(strategy_name, delegate, parameters)

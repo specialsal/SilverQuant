@@ -6,7 +6,7 @@ from gmtrade.api import *
 from gmtrade.pb.account_pb2 import Order, ExecRpt, AccountStatus
 
 from tools.utils_basic import gmsymbol_to_code
-from tools.utils_cache import record_deal, new_held, del_key, get_stock_codes_and_names
+from tools.utils_cache import record_deal, new_held, del_key, StockNames
 from tools.utils_ding import DingMessager
 
 
@@ -31,7 +31,7 @@ class GmCallback:
         self.path_held = path_held
         self.path_maxp = path_maxp
 
-        self.code_name: Dict = get_stock_codes_and_names()
+        self.stock_names = StockNames()
         self.debug: bool = debug
 
         GmCache.gm_callback = self
@@ -57,7 +57,7 @@ class GmCallback:
             path=self.path_deal,
             timestamp=order_time,
             code=code,
-            name=self.code_name[code],
+            name=self.stock_names.get_name(code),
             order_type=side,
             remark=remark,
             price=round(price, 2),
@@ -124,7 +124,7 @@ class GmCallback:
                 del_key(self.lock_of_disk_cache, self.path_held, stock_code)
                 del_key(self.lock_of_disk_cache, self.path_maxp, stock_code)
 
-                name = self.code_name[stock_code] if stock_code in self.code_name else '(Unknown)'
+                name = self.stock_names.get_name(stock_code)
                 self.ding_messager.send_text(
                     f'{datetime.datetime.now().strftime("%H:%M:%S")} 卖出成交 {stock_code}\n'
                     f'{name} {traded_volume}股 {traded_price:.2f}元',
@@ -133,7 +133,7 @@ class GmCallback:
             if order.side == OrderSide_Buy:
                 new_held(self.lock_of_disk_cache, self.path_held, [stock_code])
 
-                name = self.code_name[stock_code] if stock_code in self.code_name else '(Unknown)'
+                name = self.stock_names.get_name(stock_code)
                 self.ding_messager.send_text(
                     f'{datetime.datetime.now().strftime("%H:%M:%S")} 买入成交 {stock_code}\n'
                     f'{name} {traded_volume}股 {traded_price:.2f}元',

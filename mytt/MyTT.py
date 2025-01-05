@@ -68,11 +68,11 @@ def CONST(S):  # 返回序列S最后的值组成常量序列
     return np.full(len(S), S[-1])
 
 
-# def HHV(S,N):             #HHV(C, 5) 最近5天收盘最高价
-#     return pd.Series(S).rolling(N).max().values
-#
-# def LLV(S,N):             #LLV(C, 5) 最近5天收盘最低价
-#     return pd.Series(S).rolling(N).min().values
+def HHV(S,N):             #HHV(C, 5) 最近5天收盘最高价
+    return pd.Series(S).rolling(N).max().values
+
+def LLV(S,N):             #LLV(C, 5) 最近5天收盘最低价
+    return pd.Series(S).rolling(N).min().values
 
 
 def HHVBARS(S, N):  # 求N周期内S最高值到当前周期数, 返回序列
@@ -208,10 +208,9 @@ def RSI(CLOSE, N=24):  # RSI指标,和通达信小数点2位相同
     return RD(SMA(MAX(DIF, 0), N) / SMA(ABS(DIF), N) * 100)
 
 
-def WR(CLOSE, HIGH, LOW, N=10, N1=6):  # W&R 威廉指标
+def WR(CLOSE, HIGH, LOW, N=10):  # W&R 威廉指标
     WR = (HHV(HIGH, N) - CLOSE) / (HHV(HIGH, N) - LLV(LOW, N)) * 100
-    WR1 = (HHV(HIGH, N1) - CLOSE) / (HHV(HIGH, N1) - LLV(LOW, N1)) * 100
-    return RD(WR), RD(WR1)
+    return RD(WR)
 
 
 def BIAS(CLOSE, L1=6, L2=12, L3=24):  # BIAS乖离率

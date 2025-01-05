@@ -30,7 +30,38 @@ class IndexSymbol:
     INDEX_ZZ_1000 = '000852'
     INDEX_ZZ_2000 = '932000'
     INDEX_ZZ_ALL = '000985'
+    INDEX_CY_ZS = '399006'
+    INDEX_KC_50 = '000688'
     INDEX_ZX_100 = '399005'
+
+
+# 查询股票名称
+class StockNames:
+    _instance = None
+    _data = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(StockNames, cls).__new__(cls)
+            cls._data = None  # Initialize data as None initially
+        return cls._instance
+
+    def __init__(self):
+        if self._data == None:
+            self.load_codes_and_names()
+
+    def load_codes_and_names(self):
+        print('Loading codes and names...', end='')
+        self._data = get_stock_codes_and_names()
+        print('Complete!')
+
+    def get_name(self, code) -> str:
+        if self._data == None:
+            self.load_codes_and_names()
+
+        if code in self._data:
+            return self._data[code]
+        return '[Unknown]'
 
 
 def load_pickle(path: str) -> Optional[dict]:
@@ -270,8 +301,8 @@ def get_index_symbols(index_symbol: str) -> list[str]:
 
 
 def get_index_codes(index_symbol: str) -> list:
-    df = ak.index_stock_cons_csindex(symbol=index_symbol)
-    return [symbol_to_code(str(code).zfill(6)) for code in df['成分券代码'].values]
+    df = ak.index_stock_cons(symbol=index_symbol)
+    return [symbol_to_code(str(code).zfill(6)) for code in df['品种代码'].values]
 
 
 def get_prefixes_stock_codes(prefixes: set[str]) -> List[str]:
@@ -289,14 +320,14 @@ def get_prefixes_stock_codes(prefixes: set[str]) -> List[str]:
 def get_stock_codes_and_names() -> Dict[str, str]:
     ans = {}
 
-    with open('./_data/mktdt00.txt', 'r', encoding='gbk', errors='replace') as r:
+    with open('./_data/mktdt00.txt', 'r', errors='replace') as r:
         lines = r.readlines()
         for line in lines:
             arr = line.split('|')
             if len(arr) > 2 and len(arr[1]) == 6:
                 ans[arr[1] + '.SH'] = arr[2]
 
-    with open('./_data/sjshq.txt', 'r', errors='replace') as r:
+    with open('./_data/sjshq.txt', 'r', encoding='utf-8', errors='replace') as r:
         lines = r.readlines()
         for line in lines:
             arr = json.loads(line)

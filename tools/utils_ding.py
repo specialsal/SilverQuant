@@ -4,6 +4,7 @@ import hmac
 import json
 import time
 import requests
+import traceback
 import urllib.parse
 import urllib.request
 
@@ -43,34 +44,40 @@ class DingMessager(object):
         :param data: 发送的内容
         :return:
         """
-        if self.refresh_webhook():
-            header = {
-                "Content-Type": "application/json",
-                "Charset": "UTF-8"
-            }
-            send_data = json.dumps(data)  # 将字典类型数据转化为json格式
-            send_data = send_data.encode("utf-8")  # 编码为UTF-8格式
+        try:
+            if self.refresh_webhook():
+                header = {
+                    "Content-Type": "application/json",
+                    "Charset": "UTF-8"
+                }
+                send_data = json.dumps(data)
+                send_data = send_data.encode("utf-8")
 
-            # print(self.webhook_url)
-            # print(send_data)
-            response = requests.post(url=self.webhook_url, data=send_data, headers=header)
-            return json.loads(response.text)
+                response = requests.post(url=self.webhook_url, data=send_data, headers=header)
+                return json.loads(response.text)
+        except:
+            traceback.print_exc()
+            return {'errmsg': 'Exception!'}
 
     def send_text(self, message_text, succeed_text='') -> bool:
         res = self.send_message(data={
             "msgtype": "text",
-            "text": {"content": message_text},
-            "at": {"isAtAll": False},
+            "text": {
+                "content": message_text,
+            },
+            "at": {
+                "isAtAll": False,
+            },
         })
 
         if res['errmsg'] == 'ok':
             print(succeed_text, end='')
             return True
         else:
-            print(f'Ding message send failed: {res["errmsg"]}')
+            print('Ding message send failed: ', res['errmsg'])
             return False
 
-    def send_markdown(self, title, text):
+    def send_markdown(self, title, text) -> bool:
         # my_data = {
         #     "msgtype": "markdown",
         #     "markdown": {
@@ -84,20 +91,22 @@ class DingMessager(object):
         # }
 
         my_data = {
-            "msgtype": "markdown",
-            "markdown": {
-                "title": title,
-                "text": text,
+            'msgtype': 'markdown',
+            'markdown': {
+                'title': title,
+                'text': text,
             },
-            "at": {
-                "atMobiles": [""],
-                "isAtAll": False,
+            'at': {
+                'atMobiles': [''],
+                'isAtAll': False,
             }  # 是否@所有人
         }
 
         res = self.send_message(data=my_data)
 
         if res['errmsg'] == 'ok':
-            print('CSV send success!', end='')
+            print('Ding markdown send success!')
+            return True
         else:
-            print('Ding message send failed!')
+            print('Ding markdown send failed: ', res['errmsg'])
+            return False

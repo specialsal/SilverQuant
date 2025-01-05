@@ -13,8 +13,9 @@ from xtquant import xtdata
 
 from delegate.xt_delegate import XtDelegate
 from reader.reader_market import get_ak_market
-from tools.utils_cache import check_today_is_open_day, get_total_asset_increase, load_pickle, save_pickle,\
-    load_json, save_json
+from tools.utils_basic import code_to_symbol
+from tools.utils_cache import check_today_is_open_day, get_total_asset_increase, \
+    load_pickle, save_pickle, load_json, save_json, StockNames
 from tools.utils_ding import DingMessager
 
 
@@ -62,6 +63,7 @@ class XtSubscriber:
         self.open_today_hold_report = open_today_hold_report
 
         self.code_list = ['SH', 'SZ']
+        self.stock_names = StockNames()
 
     # ================
     # 策略触发主函数
@@ -82,7 +84,7 @@ class XtSubscriber:
             self.cache_quotes.update(quotes)  # 合并最新数据
 
         if self.open_tick and (not self.quick_ticks):
-            self.record_tick_to_memory(quotes)  # 更全
+            self.record_tick_to_memory(quotes)  # 更全（默认：先记录再执行）
 
         # 执行策略
         if self.cache_limits['prev_seconds'] != curr_seconds:
@@ -98,8 +100,8 @@ class XtSubscriber:
                     self.cache_quotes,
                 ):
                     with self.lock_quotes_update:
-                        if self.quick_ticks:
-                            self.record_tick_to_memory(self.cache_quotes)  # 更快
+                        if self.open_tick and self.quick_ticks:
+                            self.record_tick_to_memory(self.cache_quotes)  # 更快（先执行再记录）
                         self.cache_quotes.clear()  # execute_strategy() return True means need clear
 
     # ================
@@ -147,13 +149,18 @@ class XtSubscriber:
             ])
 
     def clean_ticks_history(self):
+        if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+            return
         self.today_ticks.clear()
+        print(f"已清除tick缓存")
 
     def save_tick_history(self):
+        if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+            return
         json_file = './_cache/debug/tick_history.json'
         with open(json_file, 'w') as file:
             json.dump(self.today_ticks, file, indent=4)
-        print(f"字典已成功存储为 {json_file} 文件")
+        print(f"当日tick数据已存储为 {json_file} 文件")
 
     # ================
     # 盘前下载数据缓存
@@ -208,12 +215,15 @@ class XtSubscriber:
             return
 
         asset = self.delegate.check_asset()
-        change = ''
+        title = f'[{self.account_id}]{self.strategy_name} 盘后清点'
+        txt = title
+        txt += f'\n\n> 资产总计: {asset.total_asset}元'
+
         increase = get_total_asset_increase(self.path_assets, curr_date, asset.total_asset)
         if increase is not None:
-            change = f'\n当日变动: {"+" if increase > 0 else ""}{round(increase, 2)}元'
-        self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name} 盘后清点'
-                                     f'\n资产总计: {asset.total_asset}元{change}')
+            txt += '\n>\n> '
+            txt += f'当日变动: {"+" if increase > 0 else ""}{round(increase, 2)}元'
+        self.ding_messager.send_markdown(title, txt)
 
     def today_deal_report(self):
         today = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -232,8 +242,11 @@ class XtSubscriber:
                 title = f'{self.strategy_name} {today} 记录 {len(df)} 条'
                 txt = title
                 for index, row in df.iterrows():
+                    # ['日期', '时间', '代码', '名称', '类型', '注释', '成交价', '成交量']
                     txt += '\n\n> '
-                    txt += ' '.join(map(str, row.tolist()))
+                    txt += f'{row["时间"]} {row["注释"]} {row["代码"]} '
+                    txt += '\n>\n> '
+                    txt += f'{row["名称"]} {row["成交量"]}股 {row["成交价"]}元 '
 
                 self.ding_messager.send_markdown(title, txt)
 
@@ -250,7 +263,11 @@ class XtSubscriber:
                 if position.volume > 0:
                     i += 1
                     txt += '\n\n>'
-                    txt += f'{i}[{position.stock_code}]{position.volume}'
+                    txt += f'' \
+                           f'{code_to_symbol(position.stock_code)} ' \
+                           f'{self.stock_names.get_name(position.stock_code)} ' \
+                           f'{position.volume}股 ' \
+                           f'{position.open_price:.2f}元'
 
             title = f'{self.strategy_name} {today} 持仓 {i} 支'
             txt = title + txt
@@ -266,17 +283,17 @@ class XtSubscriber:
 
         if self.open_tick:
             schedule.every().day.at('09:10').do(self.clean_ticks_history)
-            schedule.every().day.at('15:30').do(self.save_tick_history)
+            schedule.every().day.at('15:10').do(self.save_tick_history)
 
-        schedule.every().day.at('09:15').do(self.subscribe_tick)
+        schedule.every().day.at('09:30').do(self.subscribe_tick)
         schedule.every().day.at('11:30').do(self.unsubscribe_tick, False)
 
         schedule.every().day.at('13:00').do(self.subscribe_tick, False)
         schedule.every().day.at('15:00').do(self.unsubscribe_tick)
 
-        schedule.every().day.at('15:31').do(self.today_deal_report)
-        schedule.every().day.at('15:32').do(self.today_hold_report)
-        schedule.every().day.at('15:33').do(self.check_asset)
+        schedule.every().day.at('15:01').do(self.today_deal_report)
+        schedule.every().day.at('15:02').do(self.today_hold_report)
+        schedule.every().day.at('15:03').do(self.check_asset)
 
 
 # ================
@@ -301,19 +318,19 @@ def update_position_held(lock: threading.Lock, delegate: XtDelegate, path: str):
 
         # 添加未被缓存记录的持仓
         for position in positions:
-            if position.can_use_volume > 0 and \
-                    position.stock_code not in held_days.keys():
-                held_days[position.stock_code] = 0
+            if position.can_use_volume > 0:
+                if position.stock_code not in held_days.keys():
+                    held_days[position.stock_code] = 0
 
-        # 删除已清仓的held_days记录
-        position_codes = [position.stock_code for position in positions]
-        holding_codes = list(held_days.keys())
-        for code in holding_codes:
-            if code[0] == '_':
-                continue
-
-            if code not in position_codes:
-                del held_days[code]
+        if positions is not None and len(positions) > 0:
+            # 删除已清仓的held_days记录
+            position_codes = [position.stock_code for position in positions]
+            print('当前持仓：', position_codes)
+            holding_codes = list(held_days.keys())
+            for code in holding_codes:
+                if len(code) > 0 and code[0] != '_':
+                    if code not in position_codes:
+                        del held_days[code]
 
         save_json(path, held_days)
 

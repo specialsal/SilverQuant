@@ -3,7 +3,6 @@ import datetime
 
 import pywencai
 import akshare as ak
-import talib as ta
 
 from mytt.MyTT_advance import *
 from tools.utils_basic import pd_show_all, symbol_to_code
@@ -17,13 +16,12 @@ def select_industry_sections(
 ) -> bool:
     C = df.close
 
-    df['DIF'], df['DEA'], df['MACD'] = ta.MACD(
+    _, _, df['MACD'] = MACD(
         C,
-        fastperiod=fp,
-        slowperiod=sp,
-        signalperiod=ap,
+        SHORT=fp,
+        LONG=sp,
+        M=ap,
     )
-    df['MACD'] = df['MACD'] * 2
     df['SLOPE'] = SLOPE(df['MACD'], 5)
 
     df['AA'] = (df['SLOPE'] > 0) & (df['MACD'] > 0)

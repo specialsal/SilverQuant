@@ -28,6 +28,7 @@ class StockPool:
 
         print(f'White list refreshed {len(self.cache_whitelist)} codes.')
         print(f'Black list refreshed {len(self.cache_blacklist)} codes.')
+        print(f'Total list refreshed {len(self.get_code_list())} codes.')
 
         if self.ding_messager is not None:
             self.ding_messager.send_text(

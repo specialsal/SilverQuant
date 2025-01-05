@@ -110,8 +110,8 @@ class GmDelegate(BaseDelegate):
         print(f'[{remark}]{code}')
         if self.ding_messager is not None:
             self.ding_messager.send_text(
-                f'[{self.account_id}]{strategy_name}:{remark}\n'
-                f'{code}委买{volume}股{price:.2f}元',
+                f'[{self.account_id}]{strategy_name} {remark}\n'
+                f'{code}市买{volume}股{price:.2f}元',
                 '')
 
         orders = order_volume(
@@ -136,8 +136,8 @@ class GmDelegate(BaseDelegate):
         print(f'[{remark}]{code}')
         if self.ding_messager is not None:
             self.ding_messager.send_text(
-                f'[{self.account_id}]{strategy_name}:{remark}\n'
-                f'{code}委卖{volume}股{price:.2f}元',
+                f'[{self.account_id}]{strategy_name} {remark}\n'
+                f'{code}市卖{volume}股{price:.2f}元',
                 '')
 
         orders = order_volume(
@@ -186,8 +186,8 @@ class GmDelegate(BaseDelegate):
         print(f'[{remark}]{code}')
         if self.ding_messager is not None:
             self.ding_messager.send_text(
-                f'[{self.account_id}]{strategy_name}:{remark}\n'
-                f'{code}委买{volume}股{price:.2f}元',
+                f'[{self.account_id}]{strategy_name} {remark}\n'
+                f'{code}限买{volume}股{price:.2f}元',
                 '')
 
         orders = order_volume(
@@ -211,8 +211,8 @@ class GmDelegate(BaseDelegate):
         print(f'[{remark}]{code}')
         if self.ding_messager is not None:
             self.ding_messager.send_text(
-                f'[{self.account_id}]{strategy_name}:{remark}\n'
-                f'{code}委卖{volume}股{price:.2f}元',
+                f'[{self.account_id}]{strategy_name} {remark}\n'
+                f'{code}限卖{volume}股{price:.2f}元',
                 '')
 
         orders = order_volume(
@@ -224,6 +224,14 @@ class GmDelegate(BaseDelegate):
             position_effect=PositionEffect_Close,
         )
         return orders
+
+    def order_cancel_all_buy(self, code: str):
+        # TODO 撤单
+        pass
+
+    def order_cancel_all_sell(self, code: str):
+        # TODO 撤单
+        pass
 
 
 def is_position_holding(position: GmPosition) -> bool:
