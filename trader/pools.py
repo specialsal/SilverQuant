@@ -1,7 +1,7 @@
 from typing import Set
 
 from tools.utils_basic import symbol_to_code
-from tools.utils_cache import get_prefixes_stock_codes, get_index_codes
+from tools.utils_cache import get_prefixes_stock_codes, get_index_constituent_codes
 from tools.utils_remote import get_wencai_codes
 
 from trader.pools_indicator import get_macd_trend_indicator, get_ma_trend_indicator
@@ -97,7 +97,7 @@ class StocksPoolWhiteIndexes(StocksPoolBlackWencai):
         self.cache_whitelist.clear()
 
         for index in self.white_indexes:
-            t_white_codes = get_index_codes(index)
+            t_white_codes = get_index_constituent_codes(index)
             self.cache_whitelist.update(t_white_codes)
 
 
@@ -113,7 +113,7 @@ class StocksPoolWhiteIndexesMACD(StocksPoolBlackWencai):
         for index in self.white_indexes:
             allow, info = get_macd_trend_indicator(symbol=index)
             if allow:
-                t_white_codes = get_index_codes(index)
+                t_white_codes = get_index_constituent_codes(index)
                 self.cache_whitelist.update(t_white_codes)
 
 
