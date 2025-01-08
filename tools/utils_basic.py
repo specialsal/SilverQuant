@@ -96,12 +96,6 @@ def gmsymbol_to_code(gmsymbol: str) -> str:
     return symbol_to_code(gmsymbol_to_symbol(gmsymbol))
 
 
-# 判断是不是股票代码
-def is_stock(code_or_symbol: str):
-    return code_or_symbol[:2] in [
-        '00', '30', '60', '68', '82', '83', '87', '88', '43', '92',
-    ]
-    
 # 判断是不是可交易股票代码 包含 股票 ETF 可转债
 def is_symbol(code_or_symbol: str):
     return code_or_symbol[:2] in [
@@ -109,12 +103,21 @@ def is_symbol(code_or_symbol: str):
         # ETF and 可转债
         '15', '51', '52', '53', '56', '58', '11', '12'
     ]
-    
+
+
+# 判断是不是股票代码
+def is_stock(code_or_symbol: str):
+    return code_or_symbol[:2] in [
+        '00', '30', '60', '68', '82', '83', '87', '88', '43', '92',
+    ]
+
+
 # 判断是不是etf代码
 def is_fund_etf(code_or_symbol: str):
     return code_or_symbol[:2] in [
         '15', '51', '52', '53', '56', '58'
     ]
+
 
 # 判断是不是可转债
 def is_bond(code_or_symbol: str):
@@ -122,11 +125,12 @@ def is_bond(code_or_symbol: str):
         '11', '12'
     ]
 
+
 # 获取symbol的交易所简称
 def get_symbol_exchange(symbol: str) -> str:
     if symbol[:2] in ['00', '30', '15', '12']:
         return 'SZ'
-    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58','11']:
+    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '11']:
         return 'SH'
     elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
         return 'BJ'
