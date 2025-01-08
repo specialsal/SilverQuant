@@ -51,12 +51,14 @@ def logger_init(path=None) -> logging.Logger:
 
 # 六位数symbol代码转换成带交易所后缀code格式
 def symbol_to_code(symbol: str) -> str:
-    if symbol[:2] in ['00', '30']:
+    if symbol[:2] in ['00', '30', '15', '12']:
         return f'{symbol}.SZ'
-    elif symbol[:2] in ['60', '68']:
+    elif symbol[:2] in ['60', '68', '51', '52','53', '56', '58','12']:
         return f'{symbol}.SH'
-    else:
+    elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
         return f'{symbol}.BJ'
+    else:
+        return f'{symbol}.--'
 
 
 # 带交易所后缀code格式转换成六位数symbol代码
@@ -70,12 +72,14 @@ def code_to_symbol(code: str) -> str:
 # 掘金系列代码
 # ==========
 def symbol_to_gmsymbol(symbol: str) -> str:
-    if symbol[:2] in ['00', '30']:
+    if symbol[:2] in ['00', '30', '15', '12']:
         return f'SZSE.{symbol}'
-    elif symbol[:2] in ['60', '68']:
+    elif symbol[:2] in ['60', '68', '51', '52','53', '56', '58','12']:
         return f'SHSE.{symbol}'
+    elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
+        return f'BJSE.{symbol}'
     else:
-        return symbol + f'BJSE.{symbol}'
+        return f'--SE.{symbol}'
 
 
 def gmsymbol_to_symbol(gmsymbol: str) -> str:
@@ -92,22 +96,43 @@ def gmsymbol_to_code(gmsymbol: str) -> str:
     return symbol_to_code(gmsymbol_to_symbol(gmsymbol))
 
 
+# 判断是不是可交易股票代码 包含 股票 ETF 可转债
+def is_symbol(code_or_symbol: str):
+    return code_or_symbol[:2] in [
+        '00', '30', '60', '68', '82', '83', '87', '88', '43', '92',
+        # ETF and 可转债
+        '15', '51', '52', '53', '56', '58', '11', '12'
+    ]
+
+
 # 判断是不是股票代码
 def is_stock(code_or_symbol: str):
     return code_or_symbol[:2] in [
-        '00', '30', '60', '68', '83', '87', '43',
-        # ETF and 可转债
-        '15', '51', '56', '58', '11', '12',
+        '00', '30', '60', '68', '82', '83', '87', '88', '43', '92',
+    ]
+
+
+# 判断是不是etf代码
+def is_fund_etf(code_or_symbol: str):
+    return code_or_symbol[:2] in [
+        '15', '51', '52', '53', '56', '58'
+    ]
+
+
+# 判断是不是可转债
+def is_bond(code_or_symbol: str):
+    return code_or_symbol[:2] in [
+        '11', '12'
     ]
 
 
 # 获取symbol的交易所简称
 def get_symbol_exchange(symbol: str) -> str:
-    if symbol[:2] in ['00', '30', '15']:
+    if symbol[:2] in ['00', '30', '15', '12']:
         return 'SZ'
-    elif symbol[:2] in ['60', '68', '51', '56', '58']:
+    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '11']:
         return 'SH'
-    elif symbol[:2] in ['83', '87', '43', '82', '88']:
+    elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
         return 'BJ'
     else:
         return ''
@@ -154,7 +179,7 @@ def get_current_time_percentage(time: str) -> float:
 def get_limiting_up_rate(code: str) -> float:
     if code[:2] == '30' or code[:2] == '68':
         return 1.2
-    elif code[:1] == '8':
+    elif code[:1] == '8' or code[:1] == '9' or code[:1] == '4':
         return 1.3
     else:
         return 1.1
@@ -175,7 +200,7 @@ def get_limit_up_price(code: str, pre_close: float) -> float:
 def get_limiting_down_rate(code: str) -> float:
     if code[:2] == '30' or code[:2] == '68':
         return 0.8
-    elif code[:1] == '8':
+    elif code[:1] == '8' or code[:1] == '9' or code[:1] == '4':
         return 0.7
     else:
         return 0.9
