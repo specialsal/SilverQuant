@@ -5,7 +5,7 @@ import schedule
 
 from credentials import *
 
-from tools.utils_basic import logging_init, is_stock
+from tools.utils_basic import logging_init, is_symbol
 from tools.utils_cache import *
 from tools.utils_ding import DingMessager
 
@@ -115,7 +115,7 @@ def refresh_code_list():
 
     my_pool.refresh()
     positions = my_delegate.check_positions()
-    hold_list = [position.stock_code for position in positions if is_stock(position.stock_code)]
+    hold_list = [position.stock_code for position in positions if is_symbol(position.stock_code)]
     my_suber.update_code_list(my_pool.get_code_list() + hold_list)
 
 
@@ -132,7 +132,7 @@ def prepare_history() -> None:
 
     # 只有持仓列表
     positions = my_delegate.check_positions()
-    holding_list = [position.stock_code for position in positions if is_stock(position.stock_code)]
+    holding_list = [position.stock_code for position in positions if is_symbol(position.stock_code)]
 
     my_suber.download_cache_history(
         cache_path=cache_path,

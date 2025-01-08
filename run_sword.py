@@ -5,7 +5,7 @@ import schedule
 
 from credentials import *
 
-from tools.utils_basic import logging_init, is_stock
+from tools.utils_basic import logging_init, is_symbol
 from tools.utils_cache import *
 from tools.utils_ding import DingMessager
 
@@ -101,7 +101,7 @@ def refresh_code_list():
         return
 
     my_pool.refresh()
-    code_list = [code for code in BuyConf.break_targets.keys() if is_stock(code)]
+    code_list = [code for code in BuyConf.break_targets.keys() if is_symbol(code)]
     my_suber.update_code_list(my_pool.get_code_list() + code_list)
 
 

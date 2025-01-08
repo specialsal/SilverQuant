@@ -53,7 +53,7 @@ def logger_init(path=None) -> logging.Logger:
 def symbol_to_code(symbol: str) -> str:
     if symbol[:2] in ['00', '30', '15', '12']:
         return f'{symbol}.SZ'
-    elif symbol[:2] in ['60', '68', '51', '52','53', '56', '58','12']:
+    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '12']:
         return f'{symbol}.SH'
     elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
         return f'{symbol}.BJ'
@@ -74,7 +74,7 @@ def code_to_symbol(code: str) -> str:
 def symbol_to_gmsymbol(symbol: str) -> str:
     if symbol[:2] in ['00', '30', '15', '12']:
         return f'SZSE.{symbol}'
-    elif symbol[:2] in ['60', '68', '51', '52','53', '56', '58','12']:
+    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '12']:
         return f'SHSE.{symbol}'
     elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
         return f'BJSE.{symbol}'

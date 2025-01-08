@@ -39,7 +39,7 @@
 
 > 可以直接在Github Desktop里克隆
 > 
-> 也可以直接在终端输入 gh repo clone silver6wings/SilverQuant 然后在Github Desktop里打开
+> 也可以直接在终端输入 `gh repo clone silver6wings/SilverQuant` 然后在Github Desktop里打开
 
 用 PyCharm 打开刚才 clone 的 SilverQuant 文件夹：主菜单 File > Open，选择 SilverQuant 文件夹
 
@@ -50,49 +50,51 @@
 
 安装对应的包
  
-> 在PyCharm里安装依赖，打开Terminal输入：pip install -r requirements.txt
+> 在PyCharm里安装依赖，打开Terminal输入：`pip install -r requirements.txt`
 
-如果安装慢可以使用镜像，在指令后加 ` -i [镜像网址]` 
+如果安装慢可以使用镜像源，在指令后加 ` -i [镜像网址]` 
 
-> 1) https://pypi.tuna.tsinghua.edu.cn/simple/ 清华大学
-> 2) https://pypi.mirrors.ustc.edu.cn/simple/ 中国科技大学
-> 3) http://pypi.mirrors.ustc.edu.cn/simple/ 中国科学技术大学
-> 4) http://mirrors.aliyun.com/pypi/simple/ 阿里云
+> 可用的镜像网址
+> 
+> * https://pypi.tuna.tsinghua.edu.cn/simple/ 清华大学
+> * https://pypi.mirrors.ustc.edu.cn/simple/ 中国科技大学
+> * http://pypi.mirrors.ustc.edu.cn/simple/ 中国科学技术大学
+> * http://mirrors.aliyun.com/pypi/simple/ 阿里云
 
 ## 启动程序
 
 ### 启动QMT交易软件
 
-> 启动券商版迅投QMT的（勾选）极简模式，确认左下角数据源的链接状态正常
+启动券商版迅投QMT的（勾选）极简模式，确认左下角数据源的链接状态正常
 
-### 配置Credentials
+### 配置 Credentials
 
-> 复制项目根目录下的 credentials_sample.py，改名为credential.py并填入自己的参数
+> 复制项目根目录下的`credentials_sample.py`，改名为`credential.py`并填入自己的参数
 > 
-> 1. AUTHENTICATION 是远程策略获取推送服务的密钥，其他策略不需要可置空
-> 2. CACHE_BASE_PATH 是本地策略缓存文件夹路径，可不用修改
-> 3. QMT_开头的两项是账户相关，需要股票账户id和QMT安装位置，找不到userdata_mini文件夹需要先启动QMT相关
-> 4. DING_开头的两项是群通知相关，钉钉通知需要建群，然后建立机器人获取Webhook URL
-> 5. GM_开头的两项是模拟盘相关，模拟盘需要自行获取掘金的Secret Tokens
+> 1. `AUTHENTICATION` 是远程策略获取推送服务的密钥，其他策略不需要可置空
+> 2. `CACHE_BASE_PATH` 是本地策略缓存文件夹路径，可不用修改
+> 3. `QMT_XXX`的两项是账户相关，需要股票账户id和QMT安装位置，找不到`userdata_mini`文件夹需要先运行QMT一次
+> 4. `DING_XXX`的两项是群通知相关，钉钉通知需要建群，然后建立机器人获取 Webhook URL
+> 5. `GM_XXX`的两项是模拟盘相关，模拟盘需要自行获取掘金的 Secret Tokens
 
 ### 申请机器人
 
-如果需要钉钉机器人播报，可以自行建通知群，首先拉至少三人创建一个普通群
-
+> 如果需要钉钉机器人播报，可以自行建通知群，首先拉至少三人创建一个普通群
+>
 > 1. 群设置里：机器人 -> 添加机器人 -> 自定义机器人 -> 添加
-> 2. 安全设置：加签 获取 DING_SECRET
+> 2. 安全设置：加签 获取 `DING_SECRET`
 > 3. 勾选“同意xxxx”，并下一步
-> 4. Webhook栏，点击复制，获取 DING_TOKENS
-> 5. 配置到credentials.py
+> 4. Webhook栏，点击复制，获取 `DING_TOKENS`
+> 5. 配置到`credentials.py`
 
 ### 启动脚本
 
 > PyCharm 中打开 SilverQuant 项目根目录
 > 
-> 1. 找到 run_xxxxxx.py 文件，根目录下
-> 2. 找到 IS_PROD = False 代码处，将 False 改为 True 切换成实盘
+> 1. 找到 `run_xxxxxx.py` 文件，根目录下
+> 2. 找到 `IS_PROD = False` 代码处，将 False 改为 True 切换成实盘
 > 3. 确认 QMT 交易软件正在运行
-> 4. 启动 run_xxxxxx.py 文件，点击绿色小三角
+> 4. 启动 `run_xxxxxx.py` 文件，点击绿色小三角
 
 ### 参数配置
 
@@ -121,27 +123,25 @@ Sell Conf 卖点相关的参数
  
 ## 注意事项
 
-> 1. 尽量保持空仓开始，如果账户预先有股票则由于程序未记录持仓历史导致无法正确卖出
-> 2. 确保手动买入的时候正在开启程序，程序也会自动记录主观买入的持仓
-> 3. 使用过程，需要保证每日开市时开启程序，否则无法正确记录持仓时间和历史的最高价导致卖出无法符合预期
-> 4. 可以在 CACHE_BASE_PATH对应的目录里查看缓存是否正确，关键文件有两个
+> * 尽量保持空仓开始，如果账户预先有股票则由于程序未记录持仓历史导致无法正确卖出
+> * 确保手动买入的时候正在开启程序，程序也会自动记录主观买入的持仓
+> * 使用过程，需要保证每日开市时开启程序，否则无法正确记录持仓时间和历史的最高价导致卖出无法符合预期
+> * 可以在 CACHE_BASE_PATH对应的目录里查看缓存是否正确，关键文件有两个
 >    * `held_days.json` 里记录的是持仓天数
 >    * `max_price.json` 里记录的是历史最高价格
 
 ## 常见问题 Q & A
 
-> About setup
-> 
-> 启动之前最好重启一下系统刷新所有的软件配置
-> 
-> About akshare
-> 
-> 由于akshare会去各个官方网站抓取公开数据，网站改版会导致爬虫失效，akshare更新比较及时，更新akshare版本到最新会解决一些问题
->
->   * pip install akshare --upgrade
-> 
-> About pywencai
-> 
-> pywencai的原理是去 https://www.iwencai.com/ 抓取数据，所以记得一定要先安装 Node.js
-> 
-> 其次检查自己的 prompt 能不能在网页上搜到票
+About setup
+ 
+> * 启动之前最好重启一下系统刷新所有的软件配置
+
+About akshare
+ 
+> * 由于akshare会去各个官方网站抓取公开数据，网站改版会导致爬虫失效，akshare更新比较及时，更新akshare版本到最新会解决一些问题
+> * `pip install akshare --upgrade`
+ 
+About pywencai
+
+> * pywencai的原理是去 https://www.iwencai.com/ 抓取数据，所以记得一定要先安装 Node.js
+> * 其次检查自己的 prompt 能不能在网页上搜到票
