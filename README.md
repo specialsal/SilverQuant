@@ -1,20 +1,22 @@
 # 客户端安装说明
 
-# 系统需求
+## 系统需求
 
 > 至少是 Windows 系统，国内交易软件生态大都不支持 Mac 和 Linux
 
-# 软件下载
+## 软件下载
 
 > 下载 Github 桌面版
 > 
 > https://desktop.github.com/
 
-> 下载 PyCharm CE for Windows（注意是免费版，不是Professional）
+> 下载 PyCharm CE for Windows（注意是社区免费版即可，不必需Professional）
 > 
 > https://www.jetbrains.com/pycharm/download/?section=windows
 
 > 下载国金证券 QMT（推荐国金证券的券商版 QMT，用其他券商QMT可以下载他们对应的券商版 QMT）
+> 
+> 截至2024年，国金开通后半年，有50万入金即可找客服开通免五
 > 
 > WinRAR下载 https://www.win-rar.com/start.html?&L=0
 > 
@@ -31,7 +33,7 @@
 > https://www.myquant.cn/terminal
 
 
-# 配置环境
+## 配置环境
 
 克隆项目到本地
 
@@ -57,13 +59,13 @@
 > 3) http://pypi.mirrors.ustc.edu.cn/simple/ 中国科学技术大学
 > 4) http://mirrors.aliyun.com/pypi/simple/ 阿里云
 
-# 启动程序
+## 启动程序
 
-启动QMT交易软件
+### 启动QMT交易软件
 
 > 启动券商版迅投QMT的（勾选）极简模式，确认左下角数据源的链接状态正常
 
-配置Credentials
+### 配置Credentials
 
 > 复制项目根目录下的 credentials_sample.py，改名为credential.py并填入自己的参数
 > 
@@ -73,7 +75,17 @@
 > 4. DING_开头的两项是群通知相关，钉钉通知需要建群，然后建立机器人获取Webhook URL
 > 5. GM_开头的两项是模拟盘相关，模拟盘需要自行获取掘金的Secret Tokens
 
-启动脚本
+### 申请机器人
+
+如果需要钉钉机器人播报，可以自行建通知群，首先拉至少三人创建一个普通群
+
+> 1. 群设置里：机器人 -> 添加机器人 -> 自定义机器人 -> 添加
+> 2. 安全设置：加签 获取 DING_SECRET
+> 3. 勾选“同意xxxx”，并下一步
+> 4. Webhook栏，点击复制，获取 DING_TOKENS
+> 5. 配置到credentials.py
+
+### 启动脚本
 
 > PyCharm 中打开 SilverQuant 项目根目录
 > 
@@ -82,16 +94,16 @@
 > 3. 确认 QMT 交易软件正在运行
 > 4. 启动 run_xxxxxx.py 文件，点击绿色小三角
 
-参数配置
+### 参数配置
 
 > 修改参数后需要重新启动程序生效
 
-Pool Parameters 股票池相关的参数
+Pool Conf 股票池相关的参数
 
 > * white_indexes 白名单指数列表，买点会选择这些指数的成分券
 > * black_queries 黑名单问财语句，会拉黑当天问财语句里选出来的这些股票绝对不买
 
-Buy Parameters 买点相关的参数
+Buy Conf 买点相关的参数
 
 > * time_ranges 扫描买点时间段，如果不用买点只用卖点的话可以改成 time_ranges = []
 > * interval 扫描买点间隔，取60的约数：1-6, 10, 12, 15, 20, 30
@@ -99,7 +111,7 @@ Buy Parameters 买点相关的参数
 > 
 > 其他看代码中详细说明
 
-Sell Parameters 卖点相关的参数
+Sell Conf 卖点相关的参数
 
 > * time_ranges 扫描卖点时间段，如果不用买点只用卖点的话可以改成 time_ranges = []
 > * interval 扫描卖点间隔，取60的约数：1-6, 10, 12, 15, 20, 30
@@ -107,7 +119,7 @@ Sell Parameters 卖点相关的参数
 > 
 > 其他看代码中详细说明
  
-# 注意事项
+## 注意事项
 
 > 1. 尽量保持空仓开始，如果账户预先有股票则由于程序未记录持仓历史导致无法正确卖出
 > 2. 确保手动买入的时候正在开启程序，程序也会自动记录主观买入的持仓
@@ -116,17 +128,7 @@ Sell Parameters 卖点相关的参数
 >    * `held_days.json` 里记录的是持仓天数
 >    * `max_price.json` 里记录的是历史最高价格
 
-# 申请通知机器人
-
-钉钉机器人通知可以自行建立，首先拉至少三人创建一个普通群
-
-> 1. 群设置里：机器人 -> 添加机器人 -> 自定义机器人 -> 添加
-> 2. 安全设置：加签 获取 DING_SECRET
-> 3. 勾选“同意xxxx”，并下一步
-> 4. Webhook栏，点击复制，获取 DING_TOKENS
-> 5. 配置到credentials.py
-
-# 常见问题 Q & A
+## 常见问题 Q & A
 
 > About setup
 > 
