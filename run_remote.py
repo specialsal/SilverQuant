@@ -20,8 +20,8 @@ from tools.utils_remote import pull_stock_codes
 
 # ======== 配置 ========
 
-STRATEGY_NAME = '远程龙运'
-SELECTION_ID = 'LTT2'
+STRATEGY_NAME = '龙运打板'
+SELECTION_ID = 'LTDB'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
 IS_PROD = True
 IS_DEBUG = True
@@ -52,9 +52,10 @@ class PoolConf:
 
 
 class BuyConf:
-    time_ranges = [['14:45', '14:57']]
+    time_ranges = [['09:31', '11:00']]
+
     interval = 15
-    order_premium = 0.05    # 保证成功买入成交的溢价
+    order_premium = 0.09    # 保证成功买入成交的溢价
 
     slot_count = 20         # 持股数量上限
     slot_capacity = 30000   # 每个仓的资金上限
@@ -65,32 +66,34 @@ class BuyConf:
 
 
 class SellConf:
-    time_ranges = [['09:31', '11:30'], ['13:00', '14:57']]
+    time_ranges = [['09:30', '11:30'], ['13:00', '15:00']]
+
     interval = 5
-    order_premium = 0.05            # 保证成功卖出成交的溢价
+    order_premium = 0.09            # 保证成功卖出成交的溢价
 
     switch_hold_days = 5            # 持仓天数
     switch_demand_daily_up = 0.003  # 换仓上限乘数
     switch_begin_time = '14:30'     # 每天最早换仓时间
 
     earn_limit = 9.999              # 硬性止盈率
-    risk_limit = 1 - 0.06           # 硬性止损率
+    risk_limit = 1 - 0.07           # 硬性止损率
     risk_tight = 0.002              # 硬性止损率每日上移
 
     return_of_profit = [            # 至少保留收益范围
         (1.16, 9.99, 0.16),
-        (1.06, 1.16, 0.33),
-        (1.015, 1.06, 0.66),
+        (1.07, 1.16, 0.33),
+        (1.04, 1.07, 0.55),
+        (1.02, 1.04, 0.66),
     ]
 
-    cci_upper = 320.0               # cci 高卖点阈值
-    cci_lower = 10.0                # cci 低卖点阈值
+    cci_upper = 370.0               # cci 高卖点阈值
+    cci_lower = -70.0                # cci 低卖点阈值
 
     open_low_rate = 0.99            # 低于开仓日最低价比例
-    open_vol_rate = 0.60            # 低于开仓日成交量比例
+    open_vol_rate = 0.30            # 低于开仓日成交量比例
     tail_vol_time = '14:40'         # 低于开仓日成交量执行时间
 
-    ma_above = 20                   # 跌破N日均线卖出
+    ma_above = 30                   # 跌破N日均线卖出
 
 
 # ======== 盘前 ========
