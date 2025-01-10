@@ -192,6 +192,8 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
     if selected_codes is None:
         print(f'[{err_msg}]', end='')
         return
+    else:
+        print(f'[{len(selected_codes)}]')
 
     selections = []
     if len(selected_codes) > 0:
