@@ -21,7 +21,7 @@ from selector.select_wencai import get_wencai_codes_prices, select_query
 
 STRATEGY_NAME = '问财选股'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
-IS_PROD = True
+IS_PROD = False
 IS_DEBUG = True
 
 PATH_BASE = CACHE_BASE_PATH
@@ -51,7 +51,7 @@ class PoolConf:
 
 
 class BuyConf:
-    time_ranges = []
+    time_ranges = [['14:47', '14:57']]
     interval = 15           # 扫描买入间隔，60的约数：1-6, 10, 12, 15, 20, 30
     order_premium = 0.02    # 保证市价单成交的溢价，单位（元）
 
@@ -59,7 +59,7 @@ class BuyConf:
     slot_capacity = 10000   # 每个仓的资金上限
     once_buy_limit = 10     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
 
-    inc_limit = 1.09        # 相对于昨日收盘的涨幅限制
+    inc_limit = 1.07        # 相对于昨日收盘的涨幅限制
     min_price = 3.00        # 限制最低可买入股票的现价
 
 
@@ -115,9 +115,17 @@ def refresh_code_list():
 
 def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
     codes_wencai = get_wencai_codes_prices(select_query)
+    codes_top = {}
+
+    i = 0
+    for k in codes_wencai:
+        codes_top[k] = codes_wencai[k]
+        i += 1
+        if i >= BuyConf.slot_count:
+            break
 
     selections = []
-    for code in codes_wencai:
+    for code in codes_top:
         if code in my_pool.cache_blacklist:
             debug(code, f'在黑名单')
             continue

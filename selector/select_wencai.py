@@ -3,37 +3,16 @@ https://www.iwencai.com/
 """
 import datetime
 import pywencai
+# from selector.select_queries import *
 
-query_1 = '，'.join([
-    '量比大于1.8',
-    '大单净量大于0.0',
-    '主板',
-    '非ST',
-    '50亿<市值<1000亿',
-    '委比大于0.02',
-    '利润增长大于50%',
-])
-
-query_2 = '，'.join([
-    # 'MACD<0',
-    '10个交易日内MACD绿柱昨日最长',
-    'MACD今日上升',
-    '流通市值小于100亿',
-    '最近一个月内有一次涨幅大于9.9%',
-    '非北交所',
-    '非科创板',
-    '非ST',
-    '上市时间大于100天',
-])
-
-select_query = '主板，非st，roe大于10%，市值大于50亿，股价低于90，向上突破60日均线'
-print(select_query, '\n')
+select_query = "中证500成分股，非ST，非科创，MACD金叉"  # 这里自定义问财选股的问句prompt
+print('选股问句：', select_query, '\n')
 
 
 def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
     df = pywencai.get(query=query)
 
-    if df is not None and type(df) != dict and df.shape[0] > 0:
+    if df is not None and type(df) is not dict and df.shape[0] > 0:
         possible_price_columns = [
             '现价(元)',
             '最新价',
@@ -48,7 +27,7 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
                 target_col = temp_col
                 break
 
-        if target_col == None:
+        if target_col is None:
             return {}
 
         df['最新价'] = df[target_col].astype(float)
@@ -63,8 +42,15 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
 
 if __name__ == '__main__':
     from tools.utils_basic import pd_show_all
+
     pd_show_all()
 
     # a = select(select_query, debugging=True)
     a = get_wencai_codes_prices([select_query])
     print(a)
+    i = 0
+    for k in a:
+        print(k, a[k])
+        i += 1
+        if i >= 10:
+            break

@@ -20,7 +20,7 @@ from tools.utils_remote import pull_stock_codes
 
 # ======== 配置 ========
 
-STRATEGY_NAME = '龙运打板'
+STRATEGY_NAME = '远程选股'
 SELECTION_ID = 'LTDB'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
 IS_PROD = True
