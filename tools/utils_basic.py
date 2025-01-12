@@ -53,7 +53,7 @@ def logger_init(path=None) -> logging.Logger:
 def symbol_to_code(symbol: str) -> str:
     if symbol[:2] in ['00', '30', '15', '12']:
         return f'{symbol}.SZ'
-    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '12']:
+    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '11']:
         return f'{symbol}.SH'
     elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
         return f'{symbol}.BJ'
@@ -74,7 +74,7 @@ def code_to_symbol(code: str) -> str:
 def symbol_to_gmsymbol(symbol: str) -> str:
     if symbol[:2] in ['00', '30', '15', '12']:
         return f'SZSE.{symbol}'
-    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '12']:
+    elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '11']:
         return f'SHSE.{symbol}'
     elif symbol[:2] in ['83', '87', '43', '82', '88', '92']:
         return f'BJSE.{symbol}'
@@ -99,9 +99,11 @@ def gmsymbol_to_code(gmsymbol: str) -> str:
 # 判断是不是可交易股票代码 包含 股票 ETF 可转债
 def is_symbol(code_or_symbol: str):
     return code_or_symbol[:2] in [
-        '00', '30', '60', '68', '82', '83', '87', '88', '43', '92',
-        # ETF and 可转债
-        '15', '51', '52', '53', '56', '58', '11', '12'
+        '00', '30',  # 深交所
+        '60', '68',  # 上交所
+        '82', '83', '87', '88', '43', '92',  # 北交所
+        '15', '51', '52', '53', '56', '58',  # ETF
+        '11', '12',  # 可转债
     ]
 
 
@@ -110,6 +112,11 @@ def is_stock(code_or_symbol: str):
     return code_or_symbol[:2] in [
         '00', '30', '60', '68', '82', '83', '87', '88', '43', '92',
     ]
+
+
+# 判断是不是科创证券
+def is_stock_kc(code_or_symbol: str):
+    return code_or_symbol[:2] == '68'
 
 
 # 判断是不是etf代码
