@@ -222,7 +222,8 @@ class XtSubscriber:
         increase = get_total_asset_increase(self.path_assets, curr_date, asset.total_asset)
         if increase is not None:
             txt += '\n>\n> '
-            txt += f'当日变动: {"+" if increase > 0 else ""}{round(increase, 2)}元'
+            txt += f'当日变动: {"+" if increase > 0 else ""}{round(increase, 2)}元' \
+                   f'({"+" if increase > 0 else ""}{round(increase * 100 / asset.total_asset, 2)}%)'
         self.ding_messager.send_markdown(title, txt)
 
     def today_deal_report(self):
