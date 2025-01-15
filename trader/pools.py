@@ -78,7 +78,7 @@ class StocksPoolWhiteCustomSymbol(StocksPoolBlackWencai):
             for line in lines:
                 line = line.replace('\n', '')
                 if len(line) >= 6:
-                    line = line[0:6]
+                    line = line[-6:]  # 只获取最后六位
                     code = symbol_to_code(line)
                     codes.append(code)
             self.cache_whitelist.update(codes)

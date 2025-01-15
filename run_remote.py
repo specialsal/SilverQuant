@@ -232,7 +232,7 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
                     buy_count = buy_count - 1
                     # 如果今天未被选股过 and 目前没有持仓则记录（意味着不会加仓
                     my_buyer.order_buy(code=code, price=price, last_close=last_close,
-                                       volume=buy_volume, remark='市价买入')
+                                       volume=buy_volume, remark='买入委托')
             else:
                 break
 

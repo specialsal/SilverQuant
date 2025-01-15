@@ -67,7 +67,7 @@ SilverQuant 是一款基于 [迅投QMT](https://www.thinktrader.net)
 
 用 PyCharm 打开刚才 clone 的 SilverQuant 文件夹：主菜单 File > Open，选择 SilverQuant 文件夹
 
-安装 Python 3.10 版本
+安装 Python 3.10 版本（作者研发用的稳定版本，不强求但用这个潜在问题一定最少）
  
 > 1. 可以打开PyCharm在IDE里安装
 > 2. 也可以直接去Python官网下载：https://www.python.org/downloads/release/python-31010/
@@ -80,10 +80,10 @@ SilverQuant 是一款基于 [迅投QMT](https://www.thinktrader.net)
 
 > 可用的镜像网址
 > 
-> * https://pypi.tuna.tsinghua.edu.cn/simple/ 清华大学
-> * https://pypi.mirrors.ustc.edu.cn/simple/ 中国科技大学
-> * http://pypi.mirrors.ustc.edu.cn/simple/ 中国科学技术大学
-> * http://mirrors.aliyun.com/pypi/simple/ 阿里云
+> * https://pypi.tuna.tsinghua.edu.cn/simple/
+> * https://pypi.mirrors.ustc.edu.cn/simple/
+> * http://pypi.mirrors.ustc.edu.cn/simple/
+> * http://mirrors.aliyun.com/pypi/simple/
 
 ## 启动程序
 
@@ -155,47 +155,35 @@ Sell Conf 卖点相关的参数
 >    * `held_days.json` 里记录的是持仓天数
 >    * `max_price.json` 里记录的是历史最高价格
 
-## 常见问题 Q & A
-
-About setup
- 
-> * 启动之前最好重启一下系统刷新所有的软件配置
-
-About akshare
- 
-> * 由于akshare会去各个官方网站抓取公开数据，网站改版会导致爬虫失效，akshare更新比较及时，更新akshare版本到最新会解决一些问题
-> * `pip install akshare --upgrade`
- 
-About pywencai
-
-> * pywencai的原理是去 https://www.iwencai.com/ 抓取数据，所以记得一定要先安装 Node.js
-> * 其次检查自己的 prompt 能不能在网页上搜到票
-
 ---
 
 # 进阶配置
 
+最好需要一定的编程基础，自定义组合卖出策略时需要添加代码
+
 ## 入口说明
 
-策略本身有一些开箱即用的启动程序，可以直接运行
+策略本身有一些开箱即用的启动程序，可以直接运行。
 
-> run_wencai.py
->
-> 利用同花顺问财大模型选股买入，需要自行定义prompt选股问句，在`selector/select_wencai.py`中定义
-> 
-> 可以用来快速建立原型，做模拟盘测试，预估大致收益
+由于 QMT 针对单个操作系统 instance 只能单开，所以每次尽可能只 run 一个策略，以防冲突。
 
-> run_remote.py
->
-> 对于需要Linux或者分布式大数据计算的场景，可以自行搭建推票服务，程序会通过http协议远程读取数据执行买入
-
-> run_shield.py
->
-> 适用于手动买入，量化卖出的半自动场景需求
-
-> run_sword.py
->
-> 适用于自定义票池，价格上穿自定义阈值后自动买入预设量额的场景需求
+```
+run_wencai.py
+利用同花顺问财大模型选股买入，需要自行定义prompt选股问句，在`selector/select_wencai.py`中定义
+可以用来快速建立原型，做模拟盘测试，预估大致收益
+```
+```
+run_remote.py
+对于需要Linux或者分布式大数据计算的场景，可以自行搭建推票服务，程序会通过http协议远程读取数据执行买入
+```
+```
+run_shield.py
+适用于手动买入，量化卖出的半自动场景需求
+```
+```
+run_sword.py
+适用于自定义票池，价格上穿自定义阈值后自动买入预设量额的场景需求
+```
 
 ## 组合卖出
 
@@ -204,23 +192,23 @@ About pywencai
 以下为预定义的卖出策略单元：
 
 ```
-Hard Seller 硬性止损
+Hard Seller: 硬性止损
 
 根据建仓价的下跌比例绝对止损
-# 绝对止盈率  earn_limit = 9.999
-# 绝对止损率  risk_limit = 0.979
-# 换仓下限乘数  risk_tight = 0.002
+earn_limit = 9.999  # 绝对止盈率
+risk_limit = 0.979  # 绝对止损率
+risk_tight = 0.002  # 换仓下限乘数
 ```
 ```
-Switch Seller 换仓卖出
+Switch Seller: 换仓卖出
 
 盈利未达预期则卖出换仓
-# 持仓天数  switch_hold_days = 3
-# 换仓上限乘数  switch_require_daily_up = 0.003
-# 每天最早换仓时间  switch_begin_time = '14:30'
+switch_hold_days = 3             # 持仓天数
+switch_require_daily_up = 0.003  # 换仓上限乘数
+switch_begin_time = '14:30'      # 每天最早换仓时间
 ```
 ```
-Fall Seller 回落止盈
+Fall Seller: 回落止盈
 
 历史最高价回落比例止盈
 fall_from_top = [
@@ -229,51 +217,73 @@ fall_from_top = [
 ]
 ```
 ```
-Return Seller 回撤止盈
+Return Seller: 回撤止盈
 
 浮盈回撤百分止盈
-# 至少保留收益范围
-return_of_profit= [
+return_of_profit = [
     (1.07, 9.99, 0.10),
 ]
 ```
 ```
-MA Seller 跌破均线卖出
+MA Seller: 跌破均线卖出
 
 均线一般为价格的一个支撑位
-# 跌破N日均线卖出 ma_above = 5
+ma_above = 5  # 跌破N日均线卖出
 ```
 ```
-CCI Seller
-CCI 冲高或回落卖出
-# cci 高卖点阈值  cci_upper = 330.0
-# cci 低卖点阈值  cci_lower = 10.0
+CCI Seller: CCI 冲高或回落卖出
+cci_upper = 330.0  # cci 高卖点阈值
+cci_lower = 10.0   # cci 低卖点阈值
 ```
 ```
-Tail Cap Seller 尾盘涨停卖出
+Tail Cap Seller: 尾盘涨停卖出
 
 尾盘涨停一般视为卖出信号，第二天多低开
-# 尾盘开始时间 tail_start_minute = '14:30'
+tail_start_minute = '14:30'  # 尾盘开始时间
 ```
 ```
-Open Day Seller 开仓日当天相关参数卖出
+Open Day Seller: 开仓日当天相关参数卖出
 
-# 低于开仓日最低价比例  open_low_rate = 0.99
-# 低于开仓日成交量比例  open_vol_rate = 0.60
-# 低于开仓日成交量执行时间 tail_vol_time = '14:45'
+open_low_rate = 0.99     # 低于开仓日最低价比例
+open_vol_rate = 0.60     # 低于开仓日成交量比例
+tail_vol_time = '14:45'  # 低于开仓日成交量执行时间
 ```
 ```
-Volume Drop Seller 次日成交量萎缩卖出
+Volume Drop Seller: 次日成交量萎缩卖出
 
-# 次日缩量止盈的阈值 vol_dec_thre = 0.08
-# 次日缩量止盈的时间点  vol_dec_time = '09:46'
-# 次日缩量止盈的最大涨幅  vol_dec_limit = 1.03
+vol_dec_thre = 0.08     # 次日缩量止盈的阈值
+vol_dec_time = '09:46'  # 次日缩量止盈的时间点
+vol_dec_limit = 1.03    # 次日缩量止盈的最大涨幅
 ```
 ```
-Upping Blocker
+Upping Blocker: 上升趋势禁止卖出阻断器
 
-上升趋势禁止卖出阻断器
 日内均价和MACD同时上升时，不执行后续的卖出策略
+```
+
+## 常见问题 Q & A
+```
+About QMT
+
+如果出现程序在控制台没有持续输出，需要在QMT中检查数据源是否正确设置
+```
+```
+About setup
+
+启动之前最好重启一下系统刷新所有的软件配置
+```
+```
+About akshare
+
+akshare会去各个官方网站抓取公开数据，网站改版会导致爬虫失效
+akshare更新比较及时，更新akshare版本到最新会解决一些问题
+$ pip install akshare --upgrade
+```
+``` 
+About pywencai
+
+pywencai的原理是去 https://www.iwencai.com/ 抓取数据，所以记得一定要先安装 Node.js
+其次检查自己的 prompt 能不能在网页上搜到票
 ```
 
 ---
@@ -283,7 +293,8 @@ Upping Blocker
 本项目遵循 Apache 2.0 开原许可协议
 
 * 对于代码使用过程中造成的任何损失，作者不承担任何责任
-* 在您的策略被验证成熟之前，建议谨慎实盘重仓测试
+* 对于代码改进有任何想法和建议，欢迎在 [Issues](https://github.com/silver6wings/SilverQuant/issues) 提交问题或直接提交PR修复
+* 财不入急门，强烈建议在您的策略被验证成熟之前，至少先谨慎实盘轻仓测试
 
 # 联系作者
 

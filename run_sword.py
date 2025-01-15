@@ -175,7 +175,7 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
                 debug(f'{code} 今日已选')
             else:
                 my_buyer.order_buy(code=code, price=price, last_close=last_close,
-                                   volume=buy_volume, remark='计划买入')
+                                   volume=buy_volume, remark='买入委托')
 
     # 记录选股历史
     if curr_date not in cache_selected:
