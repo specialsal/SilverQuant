@@ -141,11 +141,14 @@ class XtSubscriber:
             if code not in self.today_ticks:
                 self.today_ticks[code] = []
 
-            tick_time = datetime.datetime.fromtimestamp(quotes[code]['time'] / 1000).strftime('%H:%M:%S')
+            quote = quotes[code]
+            tick_time = datetime.datetime.fromtimestamp(quote['time'] / 1000).strftime('%H:%M:%S')
             self.today_ticks[code].append([
-                tick_time,                              # 成交时间，格式：%H:%M:%S
-                round(quotes[code]['lastPrice'], 2),    # 成交价格
-                quotes[code]['volume'],                 # 累计成交量（手）
+                tick_time,                          # 成交时间，格式：%H:%M:%S
+                round(quote['lastPrice'], 2),       # 成交价格
+                round(quote['volume'], 0),          # 累计成交量（手）
+                round(quote['askPrice'][0], 2),     # 卖一价格
+                round(quote['bidPrice'][0], 2),     # 买一价格
             ])
 
     def clean_ticks_history(self):
