@@ -1,7 +1,11 @@
-# 简介
+如果觉得好用就给个Star反馈一下，好让作者有动力更新吖！
 
-SilverQuant 是一款基于 [迅投QMT](https://www.thinktrader.net) 
-搭建的A股证券交易实盘框架，开箱即可运行
+---
+
+# 项目简介
+
+SilverQuant 基于 [迅投QMT](https://www.thinktrader.net) 
+开发的A股证券全自动交易实盘框架，开箱即可运行
 
 旨在帮助新进入量化领域的同学解决大部分技术启动问题，支持在本地执行策略
 
@@ -150,10 +154,12 @@ Sell Conf 卖点相关的参数
 > * 尽量保持空仓开始，如果账户预先有股票则由于程序未记录持仓历史导致无法正确卖出
 > * 确保手动买入的时候正在开启程序，程序也会自动记录主观买入的持仓
 > * 使用过程，需要保证每日开市时开启程序，否则无法正确记录持仓时间和历史的最高价导致卖出无法符合预期
-> * 可以在 CACHE_BASE_PATH对应的目录里查看缓存是否正确，关键文件有两个
->    * `assets.csv` 里记录的是账户资金曲线
+> * 可以在`CACHE_BASE_PATH`对应的目录里查看缓存是否正确，关键文件有两个
 >    * `held_days.json` 里记录的是持仓天数
 >    * `max_price.json` 里记录的是历史最高价格
+> * 同时在`CACHE_BASE_PATH`对应的目录里会有其他缓存的信息可以用来复盘
+>    * `assets.csv` 里记录的是账户资金曲线
+>    * `deal_hist.csv` 里记录的是交易单历史
 
 ---
 
@@ -169,12 +175,15 @@ Sell Conf 卖点相关的参数
 
 ```
 run_wencai.py
-利用同花顺问财大模型选股买入，需要自行定义prompt选股问句，在`selector/select_wencai.py`中定义
-可以用来快速建立原型，做模拟盘测试，预估大致收益
+利用同花顺问财大模型选股买入，
+需自行定义prompt选股问句，在`selector/select_wencai.py`中定义
+可以用来快速建立原型，做模拟盘测试，预估大致收益，一般至少测试一个月
+如果需要复杂卖出策略，需要参考`run_remote.py`加入下载历史数据代码
 ```
 ```
 run_remote.py
-对于需要Linux或者分布式大数据计算的场景，可以自行搭建推票服务，程序会通过http协议远程读取数据执行买入
+对于需要Linux或者分布式大数据计算的场景
+可以自行搭建推票服务，程序会通过http协议远程读取数据执行买入
 ```
 ```
 run_shield.py
@@ -182,7 +191,7 @@ run_shield.py
 ```
 ```
 run_sword.py
-适用于自定义票池，价格上穿自定义阈值后自动买入预设量额的场景需求
+适用于手动票池，价格上穿预定阈值后自动买入预设量额的场景需求
 ```
 
 ## 组合卖出
@@ -225,38 +234,38 @@ return_of_profit = [
 ]
 ```
 ```
-MA Seller: 跌破均线卖出
-
-均线一般为价格的一个支撑位
-ma_above = 5  # 跌破N日均线卖出
-```
-```
-CCI Seller: CCI 冲高或回落卖出
-cci_upper = 330.0  # cci 高卖点阈值
-cci_lower = 10.0   # cci 低卖点阈值
-```
-```
 Tail Cap Seller: 尾盘涨停卖出
 
 尾盘涨停一般视为卖出信号，第二天多低开
 tail_start_minute = '14:30'  # 尾盘开始时间
 ```
 ```
-Open Day Seller: 开仓日当天相关参数卖出
+MA Seller: 跌破均线卖出(需要历史数据)
+
+均线一般为价格的一个支撑位
+ma_above = 5  # 跌破N日均线卖出
+```
+```
+CCI Seller: CCI 冲高或回落卖出(需要历史数据)
+cci_upper = 330.0  # cci 高卖点阈值
+cci_lower = 10.0   # cci 低卖点阈值
+```
+```
+Open Day Seller: 开仓日当天相关参数卖出(需要历史数据)
 
 open_low_rate = 0.99     # 低于开仓日最低价比例
 open_vol_rate = 0.60     # 低于开仓日成交量比例
 tail_vol_time = '14:45'  # 低于开仓日成交量执行时间
 ```
 ```
-Volume Drop Seller: 次日成交量萎缩卖出
+Volume Drop Seller: 次日成交量萎缩卖出(需要历史数据)
 
 vol_dec_thre = 0.08     # 次日缩量止盈的阈值
 vol_dec_time = '09:46'  # 次日缩量止盈的时间点
 vol_dec_limit = 1.03    # 次日缩量止盈的最大涨幅
 ```
 ```
-Upping Blocker: 上升趋势禁止卖出阻断器
+Upping Blocker: 上升趋势禁止卖出阻断器(需要历史数据)
 
 日内均价和MACD同时上升时，不执行后续的卖出策略
 ```
@@ -282,8 +291,9 @@ $ pip install akshare --upgrade
 ``` 
 About pywencai
 
-pywencai的原理是去 https://www.iwencai.com/ 抓取数据，所以记得一定要先安装 Node.js
-其次检查自己的 prompt 能不能在网页上搜到票
+pywencai的原理是去 https://www.iwencai.com/ 抓取数据，
+记得一定要先安装 Node.js，否则会报类似xxx 'get' xxx错误
+其次检查自己的选股问句 (Prompt) 能不能在网页上搜到票
 ```
 
 ---
@@ -294,7 +304,7 @@ pywencai的原理是去 https://www.iwencai.com/ 抓取数据，所以记得一�
 
 * 对于代码使用过程中造成的任何损失，作者不承担任何责任
 * 对于代码改进有任何想法和建议，欢迎在 [Issues](https://github.com/silver6wings/SilverQuant/issues) 提交问题或直接提交PR修复
-* 财不入急门，强烈建议在您的策略被验证成熟之前，至少先谨慎实盘轻仓测试
+* 财不入急门，强烈建议在您的策略被验证成熟之前，至少先轻仓实盘谨慎测试
 
 # 联系作者
 
