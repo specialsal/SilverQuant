@@ -147,7 +147,7 @@ def prepare_history() -> None:
 # ======== 买点 ========
 
 
-def check_stock_codes(selected_codes: list[str], quotes: Dict,) -> List[Dict[str, any]]:
+def check_stock_codes(selected_codes: list[str], quotes: Dict) -> List[Dict[str, any]]:
     selections = []
 
     for code in selected_codes:
@@ -164,9 +164,6 @@ def check_stock_codes(selected_codes: list[str], quotes: Dict,) -> List[Dict[str
         #     continue
 
         quote = quotes[code]
-
-        # prev_close = quote['lastClose']
-        # curr_open = quote['open']
         curr_price = quote['lastPrice']
 
         if not curr_price > BuyConf.min_price:
@@ -196,11 +193,10 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
         print(f'[{len(selected_codes)}]')
 
     selections = []
+    # 选出一个以上的股票
     if len(selected_codes) > 0:
-        quotes = xt_get_ticks(selected_codes)
-        selections = check_stock_codes(selected_codes, quotes) if selected_codes is not None else []
-        debug(len(quotes), selected_codes, selections)
-        debug(quotes)
+        once_quotes = xt_get_ticks(selected_codes)
+        selections = check_stock_codes(selected_codes, once_quotes) if selected_codes is not None else []
 
     if len(selections) > 0:
         position_codes = [position.stock_code for position in positions]

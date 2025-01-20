@@ -9,6 +9,7 @@ from tools.utils_basic import logging_init, is_symbol
 from tools.utils_cache import *
 from tools.utils_ding import DingMessager
 
+from delegate.xt_delegate import xt_get_ticks
 from delegate.xt_subscriber import XtSubscriber, update_position_held
 
 from trader.buyer import BaseBuyer as Buyer
@@ -44,9 +45,7 @@ def debug(*args):
 
 
 class PoolConf:
-    white_indexes = [
-        IndexSymbol.INDEX_ZZ_ALL,
-    ]
+    white_indexes = []
     black_queries = ['ST', '退市']
 
 
@@ -59,9 +58,6 @@ class BuyConf:
     slot_capacity = 10000   # 每个仓的资金上限
     once_buy_limit = 10     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
 
-    inc_limit = 1.07        # 相对于昨日收盘的涨幅限制
-    min_price = 3.00        # 限制最低可买入股票的现价
-
 
 class SellConf:
     time_ranges = [['09:31', '11:30'], ['13:00', '14:57']]
@@ -73,7 +69,7 @@ class SellConf:
     switch_begin_time = '14:30'     # 每天最早换仓时间
 
     earn_limit = 9.999              # 硬性止盈率
-    risk_limit = 1 - 0.05           # 硬性止损率
+    risk_limit = 1 - 0.03           # 硬性止损率
     risk_tight = 0.002              # 硬性止损率每日上移
 
     # 涨幅超过建仓价xA，并小于建仓价xB 时，回撤涨幅的C倍卖出
@@ -107,49 +103,32 @@ def refresh_code_list():
     my_pool.refresh()
     positions = my_delegate.check_positions()
     hold_list = [position.stock_code for position in positions if is_symbol(position.stock_code)]
-    my_suber.update_code_list(my_pool.get_code_list() + hold_list)
+    my_suber.update_code_list(hold_list)
 
 
 # ======== 买点 ========
 
 
-def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
+def pull_stock_codes() -> List[str]:
     codes_wencai = get_wencai_codes_prices(select_query)
-    codes_top = {}
+    codes_top = []
 
-    i = 0
-    for k in codes_wencai:
-        codes_top[k] = codes_wencai[k]
-        i += 1
-        if i >= BuyConf.slot_count:
-            break
+    for code in codes_wencai:
+        codes_top.append(code)
 
+    return codes_top
+
+
+def check_stock_codes(selected_codes: list[str], quotes: Dict) -> List[Dict[str, any]]:
     selections = []
-    for code in codes_top:
-        if code in my_pool.cache_blacklist:
-            debug(code, f'在黑名单')
-            continue
 
-        if code not in my_pool.cache_whitelist:
-            debug(code, f'不在白名单')
-            continue
-
+    for code in selected_codes:
         if code not in quotes:
-            debug(code, f'没有quote数据')
+            debug(code, f'本次quotes没数据')
             continue
 
         quote = quotes[code]
         curr_price = quote['lastPrice']
-        curr_open = quote['open']
-        prev_close = quote['lastClose']
-
-        if not curr_price > BuyConf.min_price:
-            debug(code, f'价格小于{BuyConf.min_price}')
-            continue
-
-        if not curr_open <= curr_price <= prev_close * BuyConf.inc_limit:
-            debug(code, f'涨幅不符合区间 {curr_open} <= {curr_price} <= {prev_close * BuyConf.inc_limit}')
-            continue
 
         selection = {
             'code': code,
@@ -162,22 +141,24 @@ def select_stocks(quotes: Dict) -> List[Dict[str, any]]:
 
 
 def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
-    selections = select_stocks(quotes)
+    selected_codes = pull_stock_codes()
 
+    selections = []
     # 选出一个以上的股票
-    if len(selections) > 0:
-        # print('Selected: ', selections)
-        # selections = sorted(selections, key=lambda x: x['price'])  # 选出的股票按照现价从小到大排序
+    if len(selected_codes) > 0:
+        once_quotes = xt_get_ticks(selected_codes)
+        selections = check_stock_codes(selected_codes, once_quotes) if selected_codes is not None else []
 
+    if len(selections) > 0:
         position_codes = [position.stock_code for position in positions]
         position_count = get_holding_position_count(positions)
         available_cash = my_delegate.check_asset().cash
         available_slot = available_cash // BuyConf.slot_capacity
 
-        buy_count = max(0, BuyConf.slot_count - position_count)   # 确认剩余的仓位
-        buy_count = min(buy_count, available_slot)                      # 确认现金够用
-        buy_count = min(buy_count, len(selections))                     # 确认选出的股票够用
-        buy_count = min(buy_count, BuyConf.once_buy_limit)        # 限制一秒内下单数量
+        buy_count = max(0, BuyConf.slot_count - position_count)     # 确认剩余的仓位
+        buy_count = min(buy_count, available_slot)                  # 确认现金够用
+        buy_count = min(buy_count, len(selections))                 # 确认选出的股票够用
+        buy_count = min(buy_count, BuyConf.once_buy_limit)          # 限制一秒内下单数量
         buy_count = int(buy_count)
 
         for i in range(len(selections)):  # 依次买入

@@ -30,12 +30,12 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
         if target_col is None:
             return {}
 
-        df['最新价'] = df[target_col].astype(float)
+        df['curr_price'] = df[target_col].astype(float)
         if debugging:
             now = datetime.datetime.now()
             # now_day = now.strftime("%Y-%m-%d")
             # now_min = now.strftime("%H:%M")
-            print(f'Wencai: {now.strftime("%H:%M:%S")}\n', df[['股票代码', '股票简称', '最新价']])
+            print(f'Wencai: {now.strftime("%H:%M:%S")}\n', df[['股票代码', '股票简称', 'curr_price']])
         return df.set_index('股票代码')['最新价'].to_dict()
     return {}
 
