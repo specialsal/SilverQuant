@@ -54,7 +54,7 @@ class PoolConf:
 class BuyConf:
     time_ranges = [['09:31', '11:00']]
 
-    interval = 15
+    interval = 10
     order_premium = 0.09    # 保证成功买入成交的溢价
 
     slot_count = 20         # 持股数量上限
