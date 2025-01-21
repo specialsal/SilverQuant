@@ -4,7 +4,7 @@
 
 # 项目简介
 
-SilverQuant 基于 [迅投QMT](https://www.thinktrader.net) 
+SilverQuant 基于 [MiniQMT](https://dict.thinktrader.net/nativeApi/start_now.html) 
 开发的A股证券全自动交易实盘框架，开箱即可运行
 
 旨在帮助新进入量化领域的同学解决大部分技术启动问题，支持在本地执行策略
@@ -41,6 +41,8 @@ SilverQuant 基于 [迅投QMT](https://www.thinktrader.net)
 > 下载 PyCharm CE for Windows（注意是社区免费版即可，不必需Professional）
 > 
 > https://www.jetbrains.com/pycharm/download/?section=windows
+> 
+> *注：[VSCode](https://code.visualstudio.com/) 因为配置过程更复杂，所以不做新手推荐*
 
 > 下载国金证券 QMT（推荐国金证券的券商版 QMT，用其他券商QMT可以下载他们对应的券商版 QMT）
 > 
@@ -78,7 +80,9 @@ SilverQuant 基于 [迅投QMT](https://www.thinktrader.net)
 
 安装对应的包
  
-> 在PyCharm里安装依赖，打开Terminal输入：`pip install -r requirements.txt`
+> 在PyCharm里安装依赖，打开终端(Terminal)输入：`pip install -r requirements.txt`
+> 
+> *注：如果事先已经打开了终端，需要关闭并重新打开终端看到类似 `(venv)` 之后再执行上述命令*
 
 如果安装慢可以使用镜像源，在指令后加 ` -i [镜像网址]` 
 
