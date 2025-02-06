@@ -1,5 +1,7 @@
 import json
 import datetime
+import time
+
 import schedule
 import threading
 import math
@@ -148,7 +150,9 @@ class XtSubscriber:
                 round(quote['lastPrice'], 2),       # 成交价格
                 round(quote['volume'], 0),          # 累计成交量（手）
                 round(quote['askPrice'][0], 2),     # 卖一价格
+                round(quote['askVol'][0], 2),       # 卖一数量
                 round(quote['bidPrice'][0], 2),     # 买一价格
+                round(quote['bidVol'][0], 2),       # 买一数量
             ])
 
     def clean_ticks_history(self):
@@ -175,14 +179,12 @@ class XtSubscriber:
         group_size = 200
         for i in range(0, len(target_codes), group_size):
             sub_codes = [sub_code for sub_code in target_codes[i:i + group_size]]
-
+            time.sleep(1)
+            print(i, sub_codes)  # 已更新数量
             for code in sub_codes:
                 df = get_ak_market(code, start, end, columns=columns, adjust=adjust)
-
                 if df is not None:
                     self.cache_history[code] = df
-
-            print(i, sub_codes)  # 已更新数量
 
         t1 = datetime.datetime.now()
         print(f'Prepared TIME COST: {t1 - t0}')
@@ -220,13 +222,22 @@ class XtSubscriber:
         asset = self.delegate.check_asset()
         title = f'[{self.account_id}]{self.strategy_name} 盘后清点'
         txt = title
-        txt += f'\n\n> 资产总计: {asset.total_asset}元'
 
         increase = get_total_asset_increase(self.path_assets, curr_date, asset.total_asset)
         if increase is not None:
             txt += '\n>\n> '
             txt += f'当日变动: {"+" if increase > 0 else ""}{round(increase, 2)}元' \
                    f'({"+" if increase > 0 else ""}{round(increase * 100 / asset.total_asset, 2)}%)'
+
+        txt += '\n>\n> '
+        txt += f'持仓市值: {asset.market_value}元'
+
+        txt += '\n>\n> '
+        txt += f'剩余现金: {asset.cash}元'
+
+        txt += f'\n>\n>'
+        txt += f'资产总计: {asset.total_asset}元'
+
         self.ding_messager.send_markdown(title, txt)
 
     def today_deal_report(self):

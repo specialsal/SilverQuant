@@ -17,9 +17,11 @@ GM_SERVER_HOST = 'api.myquant.cn:9000'
 
 class GmAsset:
     def __init__(self, cash: Cash):
+        self.account_type = 0
         self.account_id = cash.account_id
         self.cash = round(cash.available, 2)
         self.frozen_cash = round(cash.frozen, 2)
+        self.market_value = round(cash.nav - cash.available - cash.frozen, 2)
         self.total_asset = round(cash.nav, 2)
 
 

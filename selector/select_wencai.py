@@ -5,7 +5,7 @@ import datetime
 import pywencai
 # from selector.select_queries import *
 
-select_query = "中证500成分股，非ST，非科创，MACD金叉"  # 这里自定义问财选股的问句prompt
+select_query = "中证500成分股，非ST，非科创，MACD金叉，按价格从小到大"  # 这里自定义问财选股的问句prompt
 print('选股问句：', select_query, '\n')
 
 
@@ -36,21 +36,14 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
             # now_day = now.strftime("%Y-%m-%d")
             # now_min = now.strftime("%H:%M")
             print(f'Wencai: {now.strftime("%H:%M:%S")}\n', df[['股票代码', '股票简称', 'curr_price']])
-        return df.set_index('股票代码')['最新价'].to_dict()
+        return df.set_index('股票代码')['curr_price'].to_dict()
     return {}
 
 
 if __name__ == '__main__':
-    from tools.utils_basic import pd_show_all
-
-    pd_show_all()
-
-    # a = select(select_query, debugging=True)
-    a = get_wencai_codes_prices([select_query])
+    a = get_wencai_codes_prices([select_query], debugging=True)
     print(a)
     i = 0
     for k in a:
-        print(k, a[k])
         i += 1
-        if i >= 10:
-            break
+        print(i, '\t', k, '\t', a[k])
