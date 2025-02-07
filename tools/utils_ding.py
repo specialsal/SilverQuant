@@ -59,25 +59,25 @@ class DingMessager(object):
             traceback.print_exc()
             return {'errmsg': 'Exception!'}
 
-    def send_text(self, message_text, succeed_text='') -> bool:
+    def send_text(self, msg: str, output: str = '', alert: bool = False) -> bool:
         res = self.send_message(data={
             "msgtype": "text",
             "text": {
-                "content": message_text,
+                "content": msg,
             },
             "at": {
-                "isAtAll": False,
+                "isAtAll": alert,
             },
         })
 
         if res['errmsg'] == 'ok':
-            print(succeed_text, end='')
+            print(output, end='')
             return True
         else:
             print('Ding message send failed: ', res['errmsg'])
             return False
 
-    def send_markdown(self, title, text) -> bool:
+    def send_markdown(self, title: str, text: str, alert: bool = False) -> bool:
         # my_data = {
         #     "msgtype": "markdown",
         #     "markdown": {
@@ -97,9 +97,8 @@ class DingMessager(object):
                 'text': text,
             },
             'at': {
-                'atMobiles': [''],
-                'isAtAll': False,
-            }  # 是否@所有人
+                'isAtAll': alert,
+            }
         }
 
         res = self.send_message(data=my_data)

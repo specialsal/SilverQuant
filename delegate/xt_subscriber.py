@@ -66,12 +66,14 @@ class XtSubscriber:
 
         self.code_list = ['SH', 'SZ']
         self.stock_names = StockNames()
+        self.last_callback_time = datetime.datetime.now()
 
     # ================
     # 策略触发主函数
     # ================
     def callback_sub_whole(self, quotes: Dict) -> None:
         now = datetime.datetime.now()
+        self.last_callback_time = now
 
         curr_date = now.strftime('%Y-%m-%d')
         curr_time = now.strftime('%H:%M')
@@ -105,6 +107,22 @@ class XtSubscriber:
                         if self.open_tick and self.quick_ticks:
                             self.record_tick_to_memory(self.cache_quotes)  # 更快（先执行再记录）
                         self.cache_quotes.clear()  # execute_strategy() return True means need clear
+
+    # ================
+    # 监测主策略执行
+    # ================
+    def callback_monitor(self):
+        now = datetime.datetime.now()
+
+        if not check_today_is_open_day(now.strftime('%Y-%m-%d')):
+            return
+
+        if now - self.last_callback_time > datetime.timedelta(minutes=1):
+            if self.ding_messager is not None:
+                self.ding_messager.send_text(
+                    f'[{self.account_id}]{self.strategy_name}:中断\n请检查QMT数据源 ',
+                    alert=True,
+                )
 
     # ================
     # 订阅tick相关
@@ -309,6 +327,15 @@ class XtSubscriber:
         schedule.every().day.at('15:01').do(self.today_deal_report)
         schedule.every().day.at('15:02').do(self.today_hold_report)
         schedule.every().day.at('15:03').do(self.check_asset)
+
+        monitor_time_list = [
+            '09:35', '09:45', '09:55', '10:05', '10:15', '10:25',
+            '10:35', '10:45', '10:55', '11:05', '11:15', '11:25',
+            '13:05', '13:15', '13:25', '13:35', '13:45', '13:55',
+            '14:05', '14:15', '14:25', '14:35', '14:45', '14:55',
+        ]
+        for monitor_time in monitor_time_list:
+            schedule.every().day.at(monitor_time).do(self.callback_monitor)
 
 
 # ================
