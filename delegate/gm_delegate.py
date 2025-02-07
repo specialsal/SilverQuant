@@ -1,3 +1,6 @@
+"""
+https://sim.myquant.cn/sim/help/Python.html
+"""
 from typing import List
 
 from gmtrade.api import *
@@ -20,8 +23,8 @@ class GmAsset:
         self.account_type = 0
         self.account_id = cash.account_id
         self.cash = round(cash.available, 2)
-        self.frozen_cash = round(cash.frozen, 2)
-        self.market_value = round(cash.nav - cash.available - cash.frozen, 2)
+        self.frozen_cash = round(cash.order_frozen, 2)
+        self.market_value = round(cash.frozen, 2)
         self.total_asset = round(cash.nav, 2)
 
 
