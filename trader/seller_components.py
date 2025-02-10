@@ -1,4 +1,4 @@
-import pandas as pd
+import logging
 
 from mytt.MyTT_custom import *
 from mytt.MyTT_advance import *
@@ -16,7 +16,6 @@ from trader.seller import BaseSeller
 class HardSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('硬性卖出策略', end=' ')
         self.earn_limit = parameters.earn_limit
         self.risk_limit = parameters.risk_limit
@@ -45,7 +44,6 @@ class HardSeller(BaseSeller):
 class SwitchSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('换仓卖出策略', end=' ')
         self.switch_hold_days = parameters.switch_hold_days
         self.switch_begin_time = parameters.switch_begin_time
@@ -73,7 +71,6 @@ class SwitchSeller(BaseSeller):
 class FallSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('回落卖出策略', end=' ')
         self.fall_from_top = parameters.fall_from_top
 
@@ -89,6 +86,9 @@ class FallSeller(BaseSeller):
                 for inc_min, inc_max, fall_threshold in self.fall_from_top:  # 逐级回落卖出
                     if (cost_price * inc_min <= max_price < cost_price * inc_max) \
                             and curr_price < max_price * (1 - fall_threshold):
+                        logging.warning(f'[Sell]'
+                                        f'cost_p:{cost_price} max_p:{max_price} '
+                                        f'inc_min:{inc_min} inc_max:{inc_max}')
                         self.order_sell(code, quote, sell_volume, f'涨{int((inc_min - 1) * 100)}%回落')
                         return True
 
@@ -96,12 +96,11 @@ class FallSeller(BaseSeller):
 
 
 # ================================
-# 涨幅回撤百分止盈
+# 浮盈回撤百分止盈
 # ================================
 class ReturnSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('回撤卖出策略', end=' ')
         self.return_of_profit = parameters.return_of_profit
 
@@ -117,6 +116,9 @@ class ReturnSeller(BaseSeller):
                 for inc_min, inc_max, fall_percentage in self.return_of_profit:  # 逐级回落止盈
                     if (cost_price * inc_min <= max_price < cost_price * inc_max) \
                             and curr_price < max_price - (max_price - cost_price) * fall_percentage:
+                        logging.warning(f'[Sell]'
+                                        f'cost_p:{cost_price} max_p:{max_price} '
+                                        f'inc_min:{inc_min} inc_max:{inc_max}')
                         self.order_sell(code, quote, sell_volume, f'涨{int((inc_min - 1) * 100)}%止盈')
                         return True
 
@@ -129,8 +131,7 @@ class ReturnSeller(BaseSeller):
 class TailCapSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
-        print('回撤卖出策略', end=' ')
+        print('尾盘涨停卖出策略', end=' ')
         self.tail_start_minute = '14:30'
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
@@ -155,7 +156,7 @@ class TailCapSeller(BaseSeller):
 class OpenDaySeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-        print('开仓日K线止损策略', end=' ')
+        print('开仓日指标止损策略', end=' ')
         self.open_low_rate = parameters.open_low_rate
         self.open_vol_rate = parameters.open_vol_rate
         self.tail_vol_time = parameters.tail_vol_time
@@ -182,13 +183,13 @@ class OpenDaySeller(BaseSeller):
                         self.order_sell(code, quote, sell_volume, '建日缩量')
                         return True
 
+
 # ================================
 # 跌破均线卖出
 # ================================
 class MASeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print(f'跌破{parameters.ma_above}日均线卖出策略', end=' ')
         self.ma_above = parameters.ma_above
 
@@ -228,7 +229,6 @@ class MASeller(BaseSeller):
 class CCISeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('CCI卖出策略', end=' ')
         self.cci_upper = parameters.cci_upper
         self.cci_lower = parameters.cci_lower
@@ -273,7 +273,6 @@ class CCISeller(BaseSeller):
 class WRSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('WR上穿卖出策略', end=' ')
         self.wr_cross = parameters.wr_cross
 
@@ -313,7 +312,6 @@ class WRSeller(BaseSeller):
 class VolumeDropSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('次缩卖出策略', end=' ')
         self.next_volume_dec_threshold = parameters.vol_dec_thre
         self.next_volume_dec_minute = parameters.vol_dec_time
@@ -344,21 +342,16 @@ class VolumeDropSeller(BaseSeller):
 # ================================
 # 双涨趋势阻断器
 # ================================
-
 class UppingBlocker(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-
         print('上行趋势禁卖阻断', end=' ')
-
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
         if history is not None:
-            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 CCI 卖出
-                sell_volume = position.can_use_volume
-
+            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:
                 curr_price = quote['lastPrice']
                 curr_vol = quote['volume']
 
