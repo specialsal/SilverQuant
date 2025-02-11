@@ -32,7 +32,7 @@ class XtSubscriber:
         execute_strategy: Callable,     # 策略回调函数
         execute_interval: int = 1,      # 策略执行间隔，单位（秒）
         ding_messager: DingMessager = None,
-        open_tick: bool = False,
+        open_tick_to_memory: bool = False,
         open_today_deal_report: bool = False,
         open_today_hold_report: bool = False,
     ):
@@ -56,7 +56,7 @@ class XtSubscriber:
         }
         self.cache_history: Dict[str, pd.DataFrame] = {}     # 记录历史日线行情的信息 { code: DataFrame }
 
-        self.open_tick = open_tick
+        self.open_tick = open_tick_to_memory
         self.quick_ticks: bool = False              # 是否开启quick tick模式
         self.today_ticks: Dict[str, list] = {}      # 记录tick的历史信息
         # [ 成交时间, 成交价格, 累计成交量 ]
@@ -248,13 +248,13 @@ class XtSubscriber:
                    f'({"+" if increase > 0 else ""}{round(increase * 100 / asset.total_asset, 2)}%)'
 
         txt += '\n>\n> '
-        txt += f'持仓市值: {asset.market_value}元'
+        txt += f'持仓市值: {round(asset.market_value, 2)}元'
 
         txt += '\n>\n> '
-        txt += f'剩余现金: {asset.cash}元'
+        txt += f'剩余现金: {round(asset.cash, 2)}元'
 
         txt += f'\n>\n>'
-        txt += f'资产总计: {asset.total_asset}元'
+        txt += f'资产总计: {round(asset.total_asset, 2)}元'
 
         self.ding_messager.send_markdown(title, txt)
 
