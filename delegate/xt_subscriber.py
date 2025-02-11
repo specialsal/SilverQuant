@@ -32,7 +32,7 @@ class XtSubscriber:
         execute_strategy: Callable,     # 策略回调函数
         execute_interval: int = 1,      # 策略执行间隔，单位（秒）
         ding_messager: DingMessager = None,
-        open_tick_to_memory: bool = False,
+        open_tick_memory_cache: bool = False,
         open_today_deal_report: bool = False,
         open_today_hold_report: bool = False,
     ):
@@ -56,7 +56,7 @@ class XtSubscriber:
         }
         self.cache_history: Dict[str, pd.DataFrame] = {}     # 记录历史日线行情的信息 { code: DataFrame }
 
-        self.open_tick = open_tick_to_memory
+        self.open_tick = open_tick_memory_cache
         self.quick_ticks: bool = False              # 是否开启quick tick模式
         self.today_ticks: Dict[str, list] = {}      # 记录tick的历史信息
         # [ 成交时间, 成交价格, 累计成交量 ]
