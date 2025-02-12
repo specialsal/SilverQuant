@@ -109,7 +109,7 @@ SilverQuant 基于 [MiniQMT](https://dict.thinktrader.net/nativeApi/start_now.ht
 > 4. `DING_XXX`的两项是群通知相关，钉钉通知需要建群，然后建立机器人获取 Webhook URL
 > 5. `GM_XXX`的两项是模拟盘相关，模拟盘需要自行获取掘金的 Secret Tokens
 
-### 申请机器人
+### 申请钉钉机器人
 
 > 如果需要钉钉机器人播报，可以自行建通知群，首先拉至少三人创建一个普通群
 >
@@ -118,6 +118,15 @@ SilverQuant 基于 [MiniQMT](https://dict.thinktrader.net/nativeApi/start_now.ht
 > 3. 勾选“同意xxxx”，并下一步
 > 4. Webhook栏，点击复制，获取 `DING_TOKENS`
 > 5. 配置到`credentials.py`
+
+### 申请掘金模拟盘
+
+> 如果需要模拟盘测试，需要先下载安装掘金3客户端，链接见上文
+> 
+> 1. 在设置菜单中找到 Token 即 `GM_CLIENT_TOKEN`
+> 2. 创建模拟账户，并完成模拟入金和模拟交易费率设置
+> 3. 在账户管理中找到`复制ID`，获取 `GM_ACCOUNT_ID`
+> 4. 配置到`credentials.py`
 
 ### 启动脚本
 
@@ -225,8 +234,8 @@ Fall Seller: 回落止盈
 
 历史最高价回落比例止盈
 fall_from_top = [
-    (1.02, 9.99, 0.200),
-    (1.01, 1.02, 0.800),
+    (1.02, 9.99, 0.02),
+    (1.01, 1.02, 0.05),
 ]
 ```
 ```
@@ -234,7 +243,9 @@ Return Seller: 回撤止盈
 
 浮盈回撤百分止盈
 return_of_profit = [
-    (1.07, 9.99, 0.10),
+    (1.07, 9.99, 0.20),
+    (1.05, 1.07, 0.50),
+    (1.03, 1.05, 0.80),
 ]
 ```
 ```
@@ -244,32 +255,32 @@ Tail Cap Seller: 尾盘涨停卖出
 tail_start_minute = '14:30'  # 尾盘开始时间
 ```
 ```
-MA Seller: 跌破均线卖出(需要历史数据)
+MA Seller: (需要历史数据) 跌破均线卖出
 
 均线一般为价格的一个支撑位
 ma_above = 5  # 跌破N日均线卖出
 ```
 ```
-CCI Seller: CCI 冲高或回落卖出(需要历史数据)
+CCI Seller: (需要历史数据) CCI 冲高或回落卖出
 cci_upper = 330.0  # cci 高卖点阈值
 cci_lower = 10.0   # cci 低卖点阈值
 ```
 ```
-Open Day Seller: 开仓日当天相关参数卖出(需要历史数据)
+Open Day Seller: (需要历史数据) 开仓日当天相关参数卖出
 
 open_low_rate = 0.99     # 低于开仓日最低价比例
 open_vol_rate = 0.60     # 低于开仓日成交量比例
 tail_vol_time = '14:45'  # 低于开仓日成交量执行时间
 ```
 ```
-Volume Drop Seller: 次日成交量萎缩卖出(需要历史数据)
+Volume Drop Seller: (需要历史数据) 次日成交量萎缩卖出
 
 vol_dec_thre = 0.08     # 次日缩量止盈的阈值
 vol_dec_time = '09:46'  # 次日缩量止盈的时间点
 vol_dec_limit = 1.03    # 次日缩量止盈的最大涨幅
 ```
 ```
-Upping Blocker: 上升趋势禁止卖出阻断器(需要历史数据)
+Upping Blocker: (需要历史数据) 上升趋势禁止卖出阻断器
 
 日内均价和MACD同时上升时，不执行后续的卖出策略
 ```
