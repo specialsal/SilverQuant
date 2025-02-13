@@ -230,11 +230,19 @@ class GmDelegate(BaseDelegate):
         )
         return orders
 
-    def order_cancel_all_buy(self, code: str):
+    def order_cancel_all(self):
+        order_cancel_all()
+
+    # order_1 = {'symbol': 'SHSE.600000', 'cl_ord_id': 'cl_ord_id_1', 'price': 11, 'side': 1, 'order_type': 1}
+    # order_2 = {'symbol': 'SHSE.600004', 'cl_ord_id': 'cl_ord_id_2', 'price': 11, 'side': 1, 'order_type': 1}
+    # orders = [order_1, order_2]
+    # order_cancel(wait_cancel_orders=orders)
+
+    def order_cancel_buy(self, code: str):
         # TODO 撤单
         pass
 
-    def order_cancel_all_sell(self, code: str):
+    def order_cancel_sell(self, code: str):
         # TODO 撤单
         pass
 

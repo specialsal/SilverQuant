@@ -1,7 +1,7 @@
 import logging
 
-from mytt.MyTT_custom import *
 from mytt.MyTT_advance import *
+# from mytt.MyTT_custom import *
 from typing import Dict, Optional
 
 from xtquant.xttype import XtPosition
@@ -17,6 +17,7 @@ class HardSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('硬性卖出策略', end=' ')
+        self.hard_time_range = parameters.hard_time_range
         self.earn_limit = parameters.earn_limit
         self.risk_limit = parameters.risk_limit
         self.risk_tight = parameters.risk_tight
@@ -24,7 +25,7 @@ class HardSeller(BaseSeller):
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
-        if held_day > 0:
+        if (held_day > 0) and (self.hard_time_range[0] <= curr_time < self.hard_time_range[1]):
             curr_price = quote['lastPrice']
             cost_price = position.open_price
             sell_volume = position.can_use_volume
@@ -37,6 +38,8 @@ class HardSeller(BaseSeller):
                 self.order_sell(code, quote, sell_volume, f'硬止盈{int((self.earn_limit - 1) * 100)}%')
                 return True
 
+        return False
+
 
 # ================================
 # 盈利未达预期则卖出换仓
@@ -45,14 +48,14 @@ class SwitchSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('换仓卖出策略', end=' ')
+        self.switch_time_range = parameters.switch_time_range
         self.switch_hold_days = parameters.switch_hold_days
-        self.switch_begin_time = parameters.switch_begin_time
         self.switch_demand_daily_up = parameters.switch_demand_daily_up
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
-        if held_day > self.switch_hold_days and curr_time >= self.switch_begin_time:
+        if (held_day > self.switch_hold_days) and (self.switch_time_range[0] <= curr_time < self.switch_time_range[1]):
             curr_price = quote['lastPrice']
             cost_price = position.open_price
             sell_volume = position.can_use_volume
@@ -72,13 +75,14 @@ class FallSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('回落卖出策略', end=' ')
+        self.fall_time_range = parameters.fall_time_range
         self.fall_from_top = parameters.fall_from_top
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
         if max_price is not None:
-            if held_day > 0:
+            if (held_day > 0) and (self.fall_time_range[0] <= curr_time < self.fall_time_range[1]):
                 curr_price = quote['lastPrice']
                 cost_price = position.open_price
                 sell_volume = position.can_use_volume
@@ -102,13 +106,14 @@ class ReturnSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('回撤卖出策略', end=' ')
+        self.return_time_range = parameters.return_time_range
         self.return_of_profit = parameters.return_of_profit
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
         if max_price is not None:
-            if held_day > 0:
+            if (held_day > 0) and (self.return_time_range[0] <= curr_time < self.return_time_range[1]):
                 curr_price = quote['lastPrice']
                 cost_price = position.open_price
                 sell_volume = position.can_use_volume
@@ -119,30 +124,31 @@ class ReturnSeller(BaseSeller):
                         logging.warning(f'[Sell]'
                                         f'cost_p:{cost_price} max_p:{max_price} '
                                         f'inc_min:{inc_min} inc_max:{inc_max}')
-                        self.order_sell(code, quote, sell_volume, f'涨{int((inc_min - 1) * 100)}%止盈')
+                        self.order_sell(code, quote, sell_volume, f'涨{int((inc_min - 1) * 100)}%回撤')
                         return True
 
         return False
 
 
 # ================================
-# 尾盘涨停卖出
+# 尾盘涨停卖出（暂时先别用）
 # ================================
 class TailCapSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('尾盘涨停卖出策略', end=' ')
-        self.tail_start_minute = '14:30'
+        self.tail_time_range = parameters.tail_time_range
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
         if history is not None:
-            if held_day > 0 and curr_time >= self.tail_start_minute:
+            if (held_day > 0) and (self.tail_time_range[0] <= curr_time < self.tail_time_range[1]):
                 sell_volume = position.can_use_volume
                 curr_price = quote['lastPrice']
                 last_close = history['close'].values[-1]
 
+                # TODO: 似乎有点bug，怎么判断是尾盘涨停？
                 if curr_price >= get_limit_up_price(code, last_close):
                     self.order_sell(code, quote, sell_volume, '尾盘涨停')
                     return True
@@ -157,9 +163,9 @@ class OpenDaySeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('开仓日指标止损策略', end=' ')
+        self.opening_time_range = parameters.opening_time_range
         self.open_low_rate = parameters.open_low_rate
         self.open_vol_rate = parameters.open_vol_rate
-        self.tail_vol_time = parameters.tail_vol_time
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
@@ -176,12 +182,14 @@ class OpenDaySeller(BaseSeller):
                     return True
 
                 # 建仓日尾盘缩量卖出
-                if curr_time >= self.tail_vol_time and curr_price < get_limit_up_price(code, quote['lastClose']):
-                    curr_volume = quote['volume']
-                    open_day_volume = history['volume'].values[-held_day] * self.open_vol_rate
-                    if curr_volume < open_day_volume:
-                        self.order_sell(code, quote, sell_volume, '建日缩量')
-                        return True
+                if curr_price < get_limit_up_price(code, quote['lastClose']):
+                    if self.opening_time_range[0] <= curr_time < self.opening_time_range[1]:
+                        curr_volume = quote['volume']
+                        open_day_volume = history['volume'].values[-held_day] * self.open_vol_rate
+                        if curr_volume < open_day_volume:
+                            self.order_sell(code, quote, sell_volume, '建日缩量')
+                            return True
+        return False
 
 
 # ================================
@@ -191,13 +199,14 @@ class MASeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print(f'跌破{parameters.ma_above}日均线卖出策略', end=' ')
+        self.ma_time_range = parameters.ma_time_range
         self.ma_above = parameters.ma_above
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
         if history is not None:
-            if held_day > 0:
+            if (held_day > 0) and (self.ma_time_range[0] <= curr_time < self.ma_time_range[1]):
                 sell_volume = position.can_use_volume
 
                 curr_price = quote['lastPrice']
@@ -230,14 +239,15 @@ class CCISeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('CCI卖出策略', end=' ')
+        self.cci_time_range = parameters.cci_time_range
         self.cci_upper = parameters.cci_upper
         self.cci_lower = parameters.cci_lower
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
-        if history is not None:
-            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 CCI 卖出
+        if (history is not None) and (self.cci_time_range[0] <= curr_time < self.cci_time_range[1]):
+            if (held_day > 0) and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 CCI 卖出
                 sell_volume = position.can_use_volume
 
                 curr_price = quote['lastPrice']
@@ -274,13 +284,14 @@ class WRSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('WR上穿卖出策略', end=' ')
+        self.wr_time_range = parameters.wr_time_range
         self.wr_cross = parameters.wr_cross
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
-        if history is not None:
-            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 CCI 卖出
+        if (history is not None) and (self.wr_time_range[0] <= curr_time < self.wr_time_range[1]):
+            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 WR 卖出
                 sell_volume = position.can_use_volume
 
                 curr_price = quote['lastPrice']
@@ -313,6 +324,7 @@ class VolumeDropSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('次缩卖出策略', end=' ')
+        self.next_time_range = parameters.next_time_range
         self.next_volume_dec_threshold = parameters.vol_dec_thre
         self.next_volume_dec_minute = parameters.vol_dec_time
         self.next_volume_dec_limit = parameters.vol_dec_limit
@@ -320,7 +332,7 @@ class VolumeDropSeller(BaseSeller):
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
-        if history is not None:
+        if (history is not None) and (self.next_time_range[0] <= curr_time < self.next_time_range[1]):
             cost_price = position.open_price
             sell_volume = position.can_use_volume
 

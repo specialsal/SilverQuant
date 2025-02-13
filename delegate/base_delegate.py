@@ -62,9 +62,13 @@ class BaseDelegate(ABC):
         pass
 
     @abstractmethod
-    def order_cancel_all_buy(self, code: str):
+    def order_cancel_all(self):
         pass
 
     @abstractmethod
-    def order_cancel_all_sell(self, code: str):
+    def order_cancel_buy(self, code: str):
+        pass
+
+    @abstractmethod
+    def order_cancel_sell(self, code: str):
         pass
