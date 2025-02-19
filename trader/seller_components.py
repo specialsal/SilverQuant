@@ -10,9 +10,9 @@ from tools.utils_basic import get_limit_up_price
 from trader.seller import BaseSeller
 
 
-# ================================
+# --------------------------------
 # 根据建仓价的下跌比例严格绝对止损
-# ================================
+# --------------------------------
 class HardSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -41,9 +41,9 @@ class HardSeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # 盈利未达预期则卖出换仓
-# ================================
+# --------------------------------
 class SwitchSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -68,9 +68,9 @@ class SwitchSeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # 历史最高价回落比例止盈
-# ================================
+# --------------------------------
 class FallSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -99,9 +99,9 @@ class FallSeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # 浮盈回撤百分止盈
-# ================================
+# --------------------------------
 class ReturnSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -130,9 +130,9 @@ class ReturnSeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # 尾盘涨停卖出（暂时先别用）
-# ================================
+# --------------------------------
 class TailCapSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -156,9 +156,9 @@ class TailCapSeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # 开仓日当天指标尾盘止损
-# ================================
+# --------------------------------
 class OpenDaySeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -192,9 +192,9 @@ class OpenDaySeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # 跌破均线卖出
-# ================================
+# --------------------------------
 class MASeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -232,9 +232,9 @@ class MASeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # CCI 冲高回落卖出
-# ================================
+# --------------------------------
 class CCISeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -277,9 +277,9 @@ class CCISeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # WR上穿卖出
-# ================================
+# --------------------------------
 class WRSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -317,9 +317,9 @@ class WRSeller(BaseSeller):
         return False
 
 
-# ================================
+# --------------------------------
 # 次日成交量萎缩卖出
-# ================================
+# --------------------------------
 class VolumeDropSeller(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
@@ -350,20 +350,40 @@ class VolumeDropSeller(BaseSeller):
 
         return False
 
-
-# ================================
-# 双涨趋势阻断器
-# ================================
-class UppingBlocker(BaseSeller):
+# --------------------------------
+# 上涨过程阻断器
+# --------------------------------
+class IncBlocker(BaseSeller):
     def __init__(self, strategy_name, delegate, parameters):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
-        print('上行趋势禁卖阻断', end=' ')
+        print('上涨过程禁卖', end=' ')
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
         if history is not None:
-            if held_day > 0 and int(curr_time[-2:]) % 5 == 0:
+            if held_day > 0:
+                if quote['lastPrice'] > quote['open'] \
+                        and round(quote['high'], 2) == round(quote['lastPrice'], 2) \
+                        and round(quote['open'], 2) == round(quote['low'], 2):
+                    return True
+
+        return False
+
+
+# --------------------------------
+# 双涨趋势阻断器
+# --------------------------------
+class UppingBlocker(BaseSeller):
+    def __init__(self, strategy_name, delegate, parameters):
+        BaseSeller.__init__(self, strategy_name, delegate, parameters)
+        print('上行趋势禁卖', end=' ')
+
+    def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
+                   held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
+
+        if history is not None:
+            if held_day > 0:
                 curr_price = quote['lastPrice']
                 curr_vol = quote['volume']
 

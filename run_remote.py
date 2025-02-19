@@ -21,7 +21,7 @@ from tools.utils_remote import pull_stock_codes
 # ======== 配置 ========
 
 STRATEGY_NAME = '远程选股'
-SELECTION_ID = 'LTDB'
+SELECTION_ID = 'LTT2'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
 IS_PROD = True
 IS_DEBUG = True
@@ -57,7 +57,7 @@ class BuyConf:
     order_premium = 0.09    # 保证成功买入成交的溢价
 
     slot_count = 20         # 持股数量上限
-    slot_capacity = 30000   # 每个仓的资金上限
+    slot_capacity = 15000   # 每个仓的资金上限
     once_buy_limit = 20     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
 
     min_price = 2.00        # 限制最低可买入股票的现价
@@ -86,6 +86,7 @@ class SellConf:
         (1.02, 1.04, 0.66),
     ]
 
+    cci_time_range = ['09:31', '14:57']
     cci_upper = 370.0               # CCI 高卖点阈值
     cci_lower = -70.0               # CCI 低卖点阈值
 

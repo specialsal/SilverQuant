@@ -83,7 +83,7 @@ class PTLSGroupSeller(GroupSellers, HardSeller, UppingBlocker, FallSeller, Retur
 
 
 # 金雀突破
-class JQTPGroupSeller(GroupSellers, HardSeller, WRSeller, FallSeller, UppingBlocker, ReturnSeller):
+class JQTPGroupSeller(GroupSellers, HardSeller, WRSeller, FallSeller, IncBlocker, ReturnSeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
         self.group_init(strategy_name, delegate, parameters)
