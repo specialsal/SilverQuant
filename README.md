@@ -123,9 +123,10 @@ SilverQuant 基于 [MiniQMT](https://dict.thinktrader.net/nativeApi/start_now.ht
 
 > 如果需要模拟盘测试，需要先下载安装掘金3客户端，链接见上文
 > 
-> 1. 在设置菜单中找到 Token 即 `GM_CLIENT_TOKEN`
-> 2. 创建模拟账户，并完成模拟入金和模拟交易费率设置
-> 3. 在账户管理中找到`复制ID`，获取 `GM_ACCOUNT_ID`
+> 1. 新用户可以先拿手机号注册一个新的账号
+> 2. 在`系统设置`中找到 密钥管理(Token) 即 `GM_CLIENT_TOKEN`
+> 2. 在`账户管理`中添加仿真账户，并完成模拟入金和模拟交易费率设置
+> 3. 在账户管理中找到`复制账户ID`，获取 `GM_ACCOUNT_ID`
 > 4. 配置到`credentials.py`
 
 ### 启动脚本
