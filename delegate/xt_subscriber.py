@@ -123,7 +123,7 @@ class XtSubscriber:
                     f'[{self.account_id}]{self.strategy_name}:中断\n请检查QMT数据源 ',
                     alert=True,
                 )
-            if len(self.code_list ) > 1 and xtdata.get_client():
+            if len(self.code_list) > 1 and xtdata.get_client():
                 print('尝试重新订阅行情数据')
                 time.sleep(1)
                 self.unsubscribe_tick(notice=False)
