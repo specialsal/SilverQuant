@@ -37,7 +37,6 @@ class HardSeller(BaseSeller):
             elif curr_price >= cost_price * self.earn_limit:
                 self.order_sell(code, quote, sell_volume, f'硬止盈{int((self.earn_limit - 1) * 100)}%')
                 return True
-
         return False
 
 
@@ -64,7 +63,6 @@ class SwitchSeller(BaseSeller):
             if curr_price < switch_upper:  # 未满足盈利目标的仓位
                 self.order_sell(code, quote, sell_volume, '换仓卖单')
                 return True
-
         return False
 
 
@@ -95,7 +93,6 @@ class FallSeller(BaseSeller):
                                         f'inc_min:{inc_min} inc_max:{inc_max}')
                         self.order_sell(code, quote, sell_volume, f'涨{int((inc_min - 1) * 100)}%回落')
                         return True
-
         return False
 
 
@@ -126,7 +123,6 @@ class ReturnSeller(BaseSeller):
                                         f'inc_min:{inc_min} inc_max:{inc_max}')
                         self.order_sell(code, quote, sell_volume, f'涨{int((inc_min - 1) * 100)}%回撤')
                         return True
-
         return False
 
 
@@ -152,7 +148,6 @@ class TailCapSeller(BaseSeller):
                 if curr_price >= get_limit_up_price(code, last_close):
                     self.order_sell(code, quote, sell_volume, '尾盘涨停')
                     return True
-
         return False
 
 
@@ -228,7 +223,6 @@ class MASeller(BaseSeller):
                 if curr_price < ma_value - 0.01:
                     self.order_sell(code, quote, sell_volume, '破均卖单')
                     return True
-
         return False
 
 
@@ -273,7 +267,6 @@ class CCISeller(BaseSeller):
                 if cci[0] < self.cci_upper < cci[1]:  # CCI 上穿
                     self.order_sell(code, quote, sell_volume, '高CCI卖')
                     return True
-
         return False
 
 
@@ -313,7 +306,6 @@ class WRSeller(BaseSeller):
                 if wr[0] < self.wr_cross < wr[1]:  # WR 上穿
                     self.order_sell(code, quote, sell_volume, 'WR上穿卖')
                     return True
-
         return False
 
 
@@ -347,7 +339,6 @@ class VolumeDropSeller(BaseSeller):
                         and cost_price < curr_price < prev_close * self.next_volume_dec_limit:
                     self.order_sell(code, quote, sell_volume, '次日缩量')
                     return True
-
         return False
 
 # --------------------------------
@@ -367,7 +358,6 @@ class IncBlocker(BaseSeller):
                         and round(quote['high'], 2) == round(quote['lastPrice'], 2) \
                         and round(quote['open'], 2) == round(quote['low'], 2):
                     return True
-
         return False
 
 
@@ -410,5 +400,4 @@ class UppingBlocker(BaseSeller):
                 if macd[0] < macd[1] and yesterday_price < today_price:  # macd上行 & 价格上行
                     # self.order_sell(code, quote, sell_volume, '上行不卖')
                     return True
-
         return False

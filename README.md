@@ -305,7 +305,8 @@ Upping Blocker: (需要历史数据) 上升趋势禁止卖出阻断器
 ```
 About QMT
 
-如果出现程序在控制台没有持续输出，需要在QMT中检查数据源是否正确设置
+如果出现程序在控制台没有持续输出，需要在QMT中检查行情源是否正确设置
+
 ```
 ```
 About setup
@@ -316,15 +317,17 @@ About setup
 About akshare
 
 akshare会去各个官方网站抓取公开数据，网站改版会导致爬虫失效
-akshare更新比较及时，更新akshare版本到最新会解决一些问题
+akshare更新比较及时，升级 akshare 版本到最新会解决一些问题
 $ pip install akshare --upgrade
 ```
 ``` 
 About pywencai
 
 pywencai的原理是去 https://www.iwencai.com/ 抓取数据，
-记得一定要先安装 Node.js，否则会报类似xxx 'get' xxx错误
-其次检查自己的选股问句 (Prompt) 能不能在网页上搜到票
+记得一定要先安装 Node.js，安装完毕至少要重启PyCharm一次
+否则会报错：'NoneType' object has no attribute 'get' 
+其次检查自己的选股提示词 (Prompt) 能不能在网页上搜到票
+$ pip install pywencai --upgrade 
 ```
 
 ---
@@ -339,6 +342,6 @@ pywencai的原理是去 https://www.iwencai.com/ 抓取数据，
 
 # 联系作者
 
-使用过程中遇到任何问题欢迎联系作者 VX: `junchaoyu_`
+使用过程中遇到任何更深层的问题，欢迎联系作者 VX: `junchaoyu_`
 
 （添加的时候记得注明来意哦，亲~）

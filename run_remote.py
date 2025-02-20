@@ -66,7 +66,7 @@ class BuyConf:
 
 class SellConf:
     time_ranges = [['09:30', '11:30'], ['13:00', '15:00']]
-    interval = 5
+    interval = 2
     order_premium = 0.09            # 保证成功卖出成交的溢价
 
     switch_time_range = ['14:30', '14:57']
