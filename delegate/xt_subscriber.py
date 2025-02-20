@@ -225,11 +225,13 @@ class XtSubscriber:
         if temp_indicators is not None and len(temp_indicators) > 0:
             # 如果有缓存就读缓存
             self.cache_history.clear()
+            self.cache_history = {}
             self.cache_history.update(temp_indicators)
             print(f'{len(self.cache_history)} histories loaded from {cache_path}')
         else:
             # 如果没缓存就刷新白名单
             self.cache_history.clear()
+            self.cache_history = {}
             self.download_from_akshare(code_list, start, end, adjust, columns)
             save_pickle(cache_path, self.cache_history)
             print(f'{len(self.cache_history)} of {len(code_list)} histories saved to {cache_path}')

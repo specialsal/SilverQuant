@@ -351,7 +351,7 @@ if __name__ == '__main__':
     schedule.every().day.at('09:11').do(refresh_code_list)
     schedule.every().day.at('09:15').do(prepare_history)    # 必须先 refresh code list
 
-    if '09:10' < temp_time < '15:30' and check_today_is_open_day(temp_date):
+    if '09:15' < temp_time < '15:30' and check_today_is_open_day(temp_date):
         held_increase()
         refresh_code_list()
         prepare_history()  # 重启时防止没有数据在这先加载历史数据
