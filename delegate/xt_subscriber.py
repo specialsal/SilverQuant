@@ -228,6 +228,8 @@ class XtSubscriber:
             self.cache_history = {}
             self.cache_history.update(temp_indicators)
             print(f'{len(self.cache_history)} histories loaded from {cache_path}')
+            if self.ding_messager is not None:
+                self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:加载{len(self.cache_history)}支')
         else:
             # 如果没缓存就刷新白名单
             self.cache_history.clear()
@@ -235,6 +237,9 @@ class XtSubscriber:
             self.download_from_akshare(code_list, start, end, adjust, columns)
             save_pickle(cache_path, self.cache_history)
             print(f'{len(self.cache_history)} of {len(code_list)} histories saved to {cache_path}')
+            if self.ding_messager is not None:
+                self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:下载{len(self.cache_history)}支')
+
 
     # ================
     # 盘后报告总结
@@ -263,7 +268,8 @@ class XtSubscriber:
         txt += f'\n>\n>'
         txt += f'资产总计: {round(asset.total_asset, 2)}元'
 
-        self.ding_messager.send_markdown(title, txt)
+        if self.ding_messager is not None:
+            self.ding_messager.send_markdown(title, txt)
 
     def today_deal_report(self):
         today = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -288,7 +294,8 @@ class XtSubscriber:
                     txt += '\n>\n> '
                     txt += f'{row["名称"]} {row["成交量"]}股 {row["成交价"]}元 '
 
-                self.ding_messager.send_markdown(title, txt)
+                if self.ding_messager is not None:
+                    self.ding_messager.send_markdown(title, txt)
 
     def today_hold_report(self):
         today = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -312,7 +319,8 @@ class XtSubscriber:
             title = f'{self.strategy_name} {today} 持仓 {i} 支'
             txt = title + txt
 
-            self.ding_messager.send_markdown(title, txt)
+            if self.ding_messager is not None:
+                self.ding_messager.send_markdown(title, txt)
 
     # ================
     # 定时器

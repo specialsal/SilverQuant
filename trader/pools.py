@@ -32,7 +32,7 @@ class StockPool:
 
         if self.ding_messager is not None:
             self.ding_messager.send_text(
-                f'[{self.account_id}]{self.strategy_name} 确认{len(self.get_code_list())}支\n'
+                f'[{self.account_id}]{self.strategy_name}:更新{len(self.get_code_list())}支\n'
                 f'白名单: {len(self.cache_whitelist)} '
                 f'黑名单: {len(self.cache_blacklist)}')
 
