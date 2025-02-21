@@ -254,12 +254,7 @@ return_of_profit = [
     (1.03, 1.05, 0.80),
 ]
 ```
-```
-Tail Cap Seller: 尾盘涨停卖出
 
-尾盘涨停一般视为卖出信号，第二天多低开
-tail_time_range = ['14:55', '14:57'] 
-```
 ```
 Open Day Seller: (需要历史数据) 开仓日当天相关参数卖出
 
@@ -296,9 +291,14 @@ next_volume_dec_minute = '09:46'    # 次日缩量止盈的时间点
 next_volume_dec_limit = 1.03        # 次日缩量止盈的最大涨幅
 ```
 ```
-Upping Blocker: (需要历史数据) 上升趋势禁止卖出阻断器
+IncidentBlocker: 上涨过程阻断器
 
-日内均价和MACD同时上升时，不执行后续的卖出策略
+开盘一直在上涨的过程中不执行任何卖出（注意GroupSeller的继承顺序）
+```
+```
+Upping Blocker: (需要历史数据) 双涨趋势阻断器
+
+日内均价和MACD同时上升时，不执行后续的卖出策略（注意GroupSeller的继承顺序）
 ```
 
 ## 常见问题 Q & A

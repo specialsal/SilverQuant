@@ -15,7 +15,6 @@ from trader.buyer import BaseBuyer as Buyer
 from trader.pools import StocksPoolWhiteIndexes as Pool
 from trader.seller_groups import ShieldGroupSeller as Seller
 
-# ======== 配置 ========
 
 STRATEGY_NAME = '进攻监控'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
@@ -278,10 +277,10 @@ if __name__ == '__main__':
     temp_time = temp_now.strftime('%H:%M')
 
     # 定时任务启动
-    schedule.every().day.at('09:00').do(held_increase)
-    schedule.every().day.at('09:05').do(refresh_code_list)
+    schedule.every().day.at('08:05').do(held_increase)
+    schedule.every().day.at('08:10').do(refresh_code_list)
 
-    if '09:15' < temp_time < '15:30' and check_today_is_open_day(temp_date):
+    if '08:15' < temp_time < '15:30' and check_today_is_open_day(temp_date):
         held_increase()
         refresh_code_list()
 

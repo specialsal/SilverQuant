@@ -126,29 +126,29 @@ class ReturnSeller(BaseSeller):
         return False
 
 
-# --------------------------------
-# 尾盘涨停卖出（暂时先别用）
-# --------------------------------
-class TailCapSeller(BaseSeller):
-    def __init__(self, strategy_name, delegate, parameters):
-        BaseSeller.__init__(self, strategy_name, delegate, parameters)
-        print('尾盘涨停卖出策略', end=' ')
-        self.tail_time_range = parameters.tail_time_range
-
-    def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
-                   held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
-
-        if history is not None:
-            if (held_day > 0) and (self.tail_time_range[0] <= curr_time < self.tail_time_range[1]):
-                sell_volume = position.can_use_volume
-                curr_price = quote['lastPrice']
-                last_close = history['close'].values[-1]
-
-                # TODO: 似乎有点bug，怎么判断是尾盘涨停？
-                if curr_price >= get_limit_up_price(code, last_close):
-                    self.order_sell(code, quote, sell_volume, '尾盘涨停')
-                    return True
-        return False
+# # --------------------------------
+# # 尾盘涨停卖出（暂时先别用）
+# # --------------------------------
+# class TailCapSeller(BaseSeller):
+#     def __init__(self, strategy_name, delegate, parameters):
+#         BaseSeller.__init__(self, strategy_name, delegate, parameters)
+#         print('尾盘涨停卖出策略', end=' ')
+#         self.tail_time_range = parameters.tail_time_range
+#
+#     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
+#                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
+#
+#         if history is not None:
+#             if (held_day > 0) and (self.tail_time_range[0] <= curr_time < self.tail_time_range[1]):
+#                 sell_volume = position.can_use_volume
+#                 curr_price = quote['lastPrice']
+#                 last_close = history['close'].values[-1]
+#
+#                 # TODO: 似乎有点bug，怎么判断是尾盘涨停？
+#                 if curr_price >= get_limit_up_price(code, last_close):
+#                     self.order_sell(code, quote, sell_volume, '尾盘涨停')
+#                     return True
+#         return False
 
 
 # --------------------------------
@@ -341,6 +341,7 @@ class VolumeDropSeller(BaseSeller):
                     return True
         return False
 
+
 # --------------------------------
 # 上涨过程阻断器
 # --------------------------------
@@ -352,12 +353,11 @@ class IncBlocker(BaseSeller):
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
-        if history is not None:
-            if held_day > 0:
-                if quote['lastPrice'] > quote['open'] \
-                        and round(quote['high'], 2) == round(quote['lastPrice'], 2) \
-                        and round(quote['open'], 2) == round(quote['low'], 2):
-                    return True
+        if held_day > 0:
+            if quote['lastPrice'] > quote['open'] \
+                    and round(quote['high'], 2) == round(quote['lastPrice'], 2) \
+                    and round(quote['open'], 2) == round(quote['low'], 2):
+                return True
         return False
 
 

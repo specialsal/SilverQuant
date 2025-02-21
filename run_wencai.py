@@ -18,7 +18,6 @@ from trader.seller_groups import ClassicGroupSeller as Seller
 
 from selector.select_wencai import get_wencai_codes_prices, select_query
 
-# ======== 配置 ========
 
 STRATEGY_NAME = '问财选股'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
@@ -296,10 +295,10 @@ if __name__ == '__main__':
     temp_time = temp_now.strftime('%H:%M')
 
     # 定时任务启动
-    schedule.every().day.at('09:10').do(held_increase)
-    schedule.every().day.at('09:11').do(refresh_code_list)
+    schedule.every().day.at('08:05').do(held_increase)
+    schedule.every().day.at('08:10').do(refresh_code_list)
 
-    if '09:15' < temp_time < '15:30' and check_today_is_open_day(temp_date):
+    if '08:15' < temp_time < '15:30' and check_today_is_open_day(temp_date):
         held_increase()
         refresh_code_list()
 

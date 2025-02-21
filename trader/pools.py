@@ -9,7 +9,6 @@ from trader.pools_section import get_dfcf_industry_stock_codes, get_dfcf_industr
     get_ths_concept_sections, get_ths_concept_stock_codes
 
 
-
 class StockPool:
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
         self.account_id = '**' + str(account_id)[-4:]

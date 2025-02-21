@@ -326,14 +326,13 @@ class XtSubscriber:
     # 定时器
     # ================
     def start_scheduler(self):
-        random_time = f'08:{str(math.floor(random() * 60)).zfill(2)}'
-        schedule.every().day.at(random_time).do(random_check_open_day)
+        schedule.every().day.at('08:00').do(prev_check_open_day)
 
         if self.open_tick:
             schedule.every().day.at('09:10').do(self.clean_ticks_history)
             schedule.every().day.at('15:10').do(self.save_tick_history)
 
-        schedule.every().day.at('09:30').do(self.subscribe_tick)
+        schedule.every().day.at('09:29').do(self.subscribe_tick)
         schedule.every().day.at('11:30').do(self.unsubscribe_tick, False)
 
         schedule.every().day.at('13:00').do(self.subscribe_tick, False)
@@ -356,7 +355,7 @@ class XtSubscriber:
 # ================
 # 检查是否交易日
 # ================
-def random_check_open_day():
+def prev_check_open_day():
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y-%m-%d')
     curr_time = now.strftime('%H:%M')
