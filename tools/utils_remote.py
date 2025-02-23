@@ -54,7 +54,7 @@ def get_ak_daily_history(
     columns: list[str] = None,
     adjust='',
 ):
-    if not is_symbol(code):
+    if not is_stock(code):
         return None
 
     try:
