@@ -24,6 +24,7 @@ class GroupSellers:
         return sold
 
 
+# 传统卖出
 class ClassicGroupSeller(GroupSellers, HardSeller, IncBlocker, ReturnSeller, FallSeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
@@ -33,7 +34,18 @@ class ClassicGroupSeller(GroupSellers, HardSeller, IncBlocker, ReturnSeller, Fal
         self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
 
 
+# 监控卖出
 class ShieldGroupSeller(GroupSellers, HardSeller, FallSeller, ReturnSeller):
+    def __init__(self, strategy_name, delegate, parameters):
+        super().__init__()
+        self.group_init(strategy_name, delegate, parameters)
+
+    def check_sell(self, code, quote, curr_date, curr_time, position, held_day, max_price, history):
+        self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
+
+
+# Deepseek
+class DeepseekGroupSeller(GroupSellers, HardSeller, SwitchSeller, FallSeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
         self.group_init(strategy_name, delegate, parameters)
@@ -54,16 +66,6 @@ class LTT2GroupSeller(GroupSellers, HardSeller, OpenDaySeller, SwitchSeller, Ret
 
 # 三倍量突破
 class T3BLGroupSeller(GroupSellers, HardSeller, SwitchSeller, FallSeller, MASeller):
-    def __init__(self, strategy_name, delegate, parameters):
-        super().__init__()
-        self.group_init(strategy_name, delegate, parameters)
-
-    def check_sell(self, code, quote, curr_date, curr_time, position, held_day, max_price, history):
-        self.group_check_sell(code, quote, curr_date, curr_time, position, held_day, max_price, history)
-
-
-# 超跌倍量
-class CDBLGroupSeller(GroupSellers, HardSeller, SwitchSeller, FallSeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
         self.group_init(strategy_name, delegate, parameters)
