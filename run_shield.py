@@ -42,7 +42,7 @@ def debug(*args):
 class PoolConf:
     white_indexes = []
 
-    black_queries = []
+    black_prompts = []
 
     # 忽略监控列表
     ignore_stocks = [

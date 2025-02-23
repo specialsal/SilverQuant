@@ -5,8 +5,8 @@ from mytt.MyTT_advance import *
 from typing import Dict, Optional
 
 from xtquant.xttype import XtPosition
-
 from tools.utils_basic import get_limit_up_price
+from tools.utils_remote import append_ak_daily_dict
 from trader.seller import BaseSeller
 
 
@@ -207,15 +207,16 @@ class MASeller(BaseSeller):
                 curr_price = quote['lastPrice']
                 curr_vol = quote['volume']
 
-                df = history._append({
-                    'datetime': curr_date,
-                    'open': quote['open'],
-                    'high': quote['high'],
-                    'low': quote['low'],
-                    'close': curr_price,
-                    'volume': curr_vol,
-                    'amount': quote['amount'],
-                }, ignore_index=True)
+                df = append_ak_daily_dict(history, quote, curr_date)
+                # df = history._append({
+                #     'datetime': curr_date,
+                #     'open': quote['open'],
+                #     'high': quote['high'],
+                #     'low': quote['low'],
+                #     'close': curr_price,
+                #     'volume': curr_vol,
+                #     'amount': quote['amount'],
+                # }, ignore_index=True)
 
                 ma_values = MA(df.close.tail(self.ma_above + 1), self.ma_above)
                 ma_value = ma_values[-1]
@@ -247,15 +248,16 @@ class CCISeller(BaseSeller):
                 curr_price = quote['lastPrice']
                 curr_vol = quote['volume']
 
-                df = history._append({
-                    'datetime': curr_date,
-                    'open': quote['open'],
-                    'high': quote['high'],
-                    'low': quote['low'],
-                    'close': curr_price,
-                    'volume': curr_vol,
-                    'amount': quote['amount'],
-                }, ignore_index=True)
+                df = append_ak_daily_dict(history, quote, curr_date)
+                # df = history._append({
+                #     'datetime': curr_date,
+                #     'open': quote['open'],
+                #     'high': quote['high'],
+                #     'low': quote['low'],
+                #     'close': curr_price,
+                #     'volume': curr_vol,
+                #     'amount': quote['amount'],
+                # }, ignore_index=True)
 
                 df['CCI'] = CCI(df['close'], df['high'], df['low'], 14)
                 cci = df['CCI'].tail(2).values
@@ -290,15 +292,16 @@ class WRSeller(BaseSeller):
                 curr_price = quote['lastPrice']
                 curr_vol = quote['volume']
 
-                df = history._append({
-                    'datetime': curr_date,
-                    'open': quote['open'],
-                    'high': quote['high'],
-                    'low': quote['low'],
-                    'close': curr_price,
-                    'volume': curr_vol,
-                    'amount': quote['amount'],
-                }, ignore_index=True)
+                df = append_ak_daily_dict(history, quote, curr_date)
+                # df = history._append({
+                #     'datetime': curr_date,
+                #     'open': quote['open'],
+                #     'high': quote['high'],
+                #     'low': quote['low'],
+                #     'close': curr_price,
+                #     'volume': curr_vol,
+                #     'amount': quote['amount'],
+                # }, ignore_index=True)
 
                 df['WR'] = WR(df['close'], df['high'], df['low'], 14)
                 wr = df['WR'].tail(2).values
@@ -377,15 +380,16 @@ class UppingBlocker(BaseSeller):
                 curr_price = quote['lastPrice']
                 curr_vol = quote['volume']
 
-                df = history._append({
-                    'datetime': curr_date,
-                    'open': quote['open'],
-                    'high': quote['high'],
-                    'low': quote['low'],
-                    'close': curr_price,
-                    'volume': curr_vol,
-                    'amount': quote['amount'],
-                }, ignore_index=True)
+                df = append_ak_daily_dict(history, quote, curr_date)
+                # df = history._append({
+                #     'datetime': curr_date,
+                #     'open': quote['open'],
+                #     'high': quote['high'],
+                #     'low': quote['low'],
+                #     'close': curr_price,
+                #     'volume': curr_vol,
+                #     'amount': quote['amount'],
+                # }, ignore_index=True)
 
                 _, _, df['MACD'] = MACD(df['close'])
                 macd = df['MACD'].tail(2).values

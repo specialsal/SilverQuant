@@ -41,9 +41,9 @@ class StockPool:
     def refresh_white(self):
         self.cache_whitelist.clear()
 
-
+# -----------------------
 # Black Wencai
-
+# -----------------------
 
 class StocksPoolBlackEmpty(StockPool):
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
@@ -53,17 +53,32 @@ class StocksPoolBlackEmpty(StockPool):
 class StocksPoolBlackWencai(StockPool):
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
         super().__init__(account_id, strategy_name, parameters, ding_messager)
-        self.black_prompts = parameters.black_queries
+        self.black_prompts = parameters.black_prompts
 
     def refresh_black(self):
-        self.cache_blacklist.clear()
+        super().refresh_black()
 
-        black_codes = get_wencai_codes(self.black_prompts)
-        self.cache_blacklist.update(black_codes)
+        codes = get_wencai_codes(self.black_prompts)
+        self.cache_blacklist.update(codes)
 
+# -----------------------
+# White Wencai
+# -----------------------
 
+class StocksPoolWhiteWencai(StocksPoolBlackWencai):
+    def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
+        super().__init__(account_id, strategy_name, parameters, ding_messager)
+        self.white_prompts = parameters.white_prompts
+
+    def refresh_white(self):
+        super().refresh_white()
+
+        codes = get_wencai_codes(self.white_prompts)
+        self.cache_whitelist.update(codes)
+
+# -----------------------
 # White Custom
-
+# -----------------------
 
 class StocksPoolWhiteCustomSymbol(StocksPoolBlackWencai):
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
@@ -71,6 +86,8 @@ class StocksPoolWhiteCustomSymbol(StocksPoolBlackWencai):
         self.white_codes_filepath = parameters.white_codes_filepath
 
     def refresh_white(self):
+        super().refresh_white()
+
         with open(self.white_codes_filepath, 'r') as r:
             lines = r.readlines()
             codes = []
@@ -82,9 +99,9 @@ class StocksPoolWhiteCustomSymbol(StocksPoolBlackWencai):
                     codes.append(code)
             self.cache_whitelist.update(codes)
 
-
+# -----------------------
 # White Indexes
-
+# -----------------------
 
 class StocksPoolWhiteIndexes(StocksPoolBlackWencai):
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
@@ -93,7 +110,6 @@ class StocksPoolWhiteIndexes(StocksPoolBlackWencai):
 
     def refresh_white(self):
         super().refresh_white()
-        self.cache_whitelist.clear()
 
         for index in self.white_indexes:
             t_white_codes = get_index_constituent_codes(index)
@@ -107,7 +123,6 @@ class StocksPoolWhiteIndexesMACD(StocksPoolBlackWencai):
 
     def refresh_white(self):
         super().refresh_white()
-        self.cache_whitelist.clear()
 
         for index in self.white_indexes:
             allow, info = get_macd_trend_indicator(symbol=index)
@@ -115,9 +130,9 @@ class StocksPoolWhiteIndexesMACD(StocksPoolBlackWencai):
                 t_white_codes = get_index_constituent_codes(index)
                 self.cache_whitelist.update(t_white_codes)
 
-
+# -----------------------
 # White Prefixes
-
+# -----------------------
 
 class StocksPoolWhitePrefixes(StocksPoolBlackWencai):
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
@@ -126,7 +141,6 @@ class StocksPoolWhitePrefixes(StocksPoolBlackWencai):
 
     def refresh_white(self):
         super().refresh_white()
-        self.cache_whitelist.clear()
 
         t_white_codes = get_prefixes_stock_codes(self.white_prefixes)
         self.cache_whitelist.update(t_white_codes)
@@ -140,7 +154,6 @@ class StocksPoolWhitePrefixesMA(StocksPoolBlackWencai):
 
     def refresh_white(self):
         super().refresh_white()
-        self.cache_whitelist.clear()
 
         allow, info = get_ma_trend_indicator(symbol=self.white_index)
         if allow:
@@ -155,7 +168,6 @@ class StocksPoolWhitePrefixesIndustry(StocksPoolBlackWencai):
 
     def refresh_white(self):
         super().refresh_white()
-        self.cache_whitelist.clear()
 
         section_names = get_dfcf_industry_sections()
         if self.ding_messager is not None:
@@ -175,7 +187,6 @@ class StocksPoolWhitePrefixesConcept(StocksPoolBlackWencai):
 
     def refresh_white(self):
         super().refresh_white()
-        self.cache_whitelist.clear()
 
         section_names = get_ths_concept_sections()
         if self.ding_messager is not None:

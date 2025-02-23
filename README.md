@@ -13,7 +13,7 @@ SilverQuant 基于 [MiniQMT](https://dict.thinktrader.net/nativeApi/start_now.ht
 
 组件化设计可以快速根据策略思路搭建原型并建立模拟测试，还能一键切换实盘
 
-投机交易的游戏一共有四个关卡：
+交易的游戏一共有四个关卡：
 
 1. 保住本金不大幅亏损
 2. 可以实现阶段性获利
@@ -147,7 +147,7 @@ SilverQuant 基于 [MiniQMT](https://dict.thinktrader.net/nativeApi/start_now.ht
 Pool Conf 股票池相关的参数
 
 > * white_indexes 白名单指数列表，买点会选择这些指数的成分券
-> * black_queries 黑名单问财语句，会拉黑当天问财语句里选出来的这些股票绝对不买
+> * black_prompts 黑名单问财语句，会拉黑当天问财语句里选出来的这些股票绝对不买
 
 Buy Conf 买点相关的参数
 

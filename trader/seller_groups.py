@@ -24,7 +24,7 @@ class GroupSellers:
         return sold
 
 
-class ClassicGroupSeller(GroupSellers, HardSeller, SwitchSeller, ReturnSeller):
+class ClassicGroupSeller(GroupSellers, HardSeller, IncBlocker, ReturnSeller, FallSeller):
     def __init__(self, strategy_name, delegate, parameters):
         super().__init__()
         self.group_init(strategy_name, delegate, parameters)

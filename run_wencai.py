@@ -45,7 +45,7 @@ def debug(*args):
 
 class PoolConf:
     white_indexes = []
-    black_queries = ['ST', '退市']
+    black_prompts = ['ST', '退市']
 
 
 class BuyConf:

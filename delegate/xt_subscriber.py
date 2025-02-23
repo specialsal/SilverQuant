@@ -4,21 +4,19 @@ import time
 
 import schedule
 import threading
-import math
 import os
 import pandas as pd
 
-from random import random
 from typing import Dict, Callable
 
 from xtquant import xtdata
 
 from delegate.xt_delegate import XtDelegate
-from reader.reader_market import get_ak_market
 from tools.utils_basic import code_to_symbol
 from tools.utils_cache import check_today_is_open_day, get_total_asset_increase, \
     load_pickle, save_pickle, load_json, save_json, StockNames
 from tools.utils_ding import DingMessager
+from tools.utils_remote import get_ak_daily_history
 
 
 class XtSubscriber:
@@ -68,9 +66,9 @@ class XtSubscriber:
         self.stock_names = StockNames()
         self.last_callback_time = datetime.datetime.now()
 
-    # ================
+    # -----------------------
     # 策略触发主函数
-    # ================
+    # -----------------------
     def callback_sub_whole(self, quotes: Dict) -> None:
         now = datetime.datetime.now()
         self.last_callback_time = now
@@ -108,9 +106,9 @@ class XtSubscriber:
                             self.record_tick_to_memory(self.cache_quotes)  # 更快（先执行再记录）
                         self.cache_quotes.clear()  # execute_strategy() return True means need clear
 
-    # ================
+    # -----------------------
     # 监测主策略执行
-    # ================
+    # -----------------------
     def callback_monitor(self):
         now = datetime.datetime.now()
 
@@ -129,9 +127,9 @@ class XtSubscriber:
                 self.unsubscribe_tick(notice=False)
                 self.subscribe_tick(notice=False)
 
-    # ================
+    # -----------------------
     # 订阅tick相关
-    # ================
+    # -----------------------
     def subscribe_tick(self, notice=True):
         if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
             return
@@ -157,9 +155,9 @@ class XtSubscriber:
         code_list += ['000001.SH']
         self.code_list = code_list
 
-    # ================
+    # -----------------------
     # 盘中实时的tick历史
-    # ================
+    # -----------------------
     def record_tick_to_memory(self, quotes):
         # 记录 tick 历史
         for code in quotes:
@@ -182,6 +180,7 @@ class XtSubscriber:
         if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
             return
         self.today_ticks.clear()
+        self.today_ticks = {}
         print(f"已清除tick缓存")
 
     def save_tick_history(self):
@@ -192,9 +191,9 @@ class XtSubscriber:
             json.dump(self.today_ticks, file, indent=4)
         print(f"当日tick数据已存储为 {json_file} 文件")
 
-    # ================
+    # -----------------------
     # 盘前下载数据缓存
-    # ================
+    # -----------------------
     def download_from_akshare(self, target_codes: list, start: str, end: str, adjust: str, columns: list[str]):
         print(f'Prepared time range: {start} - {end}')
         t0 = datetime.datetime.now()
@@ -205,7 +204,7 @@ class XtSubscriber:
             time.sleep(1)
             print(i, sub_codes)  # 已更新数量
             for code in sub_codes:
-                df = get_ak_market(code, start, end, columns=columns, adjust=adjust)
+                df = get_ak_daily_history(code, start, end, columns=columns, adjust=adjust)
                 if df is not None:
                     self.cache_history[code] = df
 
@@ -241,9 +240,9 @@ class XtSubscriber:
                 self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:下载{len(self.cache_history)}支')
 
 
-    # ================
+    # -----------------------
     # 盘后报告总结
-    # ================
+    # -----------------------
     def check_asset(self):
         curr_date = datetime.datetime.now().strftime('%Y-%m-%d')
         if not check_today_is_open_day(curr_date):
@@ -322,9 +321,9 @@ class XtSubscriber:
             if self.ding_messager is not None:
                 self.ding_messager.send_markdown(title, txt)
 
-    # ================
+    # -----------------------
     # 定时器
-    # ================
+    # -----------------------
     def start_scheduler(self):
         schedule.every().day.at('08:00').do(prev_check_open_day)
 
@@ -332,7 +331,7 @@ class XtSubscriber:
             schedule.every().day.at('09:10').do(self.clean_ticks_history)
             schedule.every().day.at('15:10').do(self.save_tick_history)
 
-        schedule.every().day.at('09:29').do(self.subscribe_tick)
+        schedule.every().day.at('09:25').do(self.subscribe_tick)
         schedule.every().day.at('11:30').do(self.unsubscribe_tick, False)
 
         schedule.every().day.at('13:00').do(self.subscribe_tick, False)
@@ -352,9 +351,9 @@ class XtSubscriber:
             schedule.every().day.at(monitor_time).do(self.callback_monitor)
 
 
-# ================
+# -----------------------
 # 检查是否交易日
-# ================
+# -----------------------
 def prev_check_open_day():
     now = datetime.datetime.now()
     curr_date = now.strftime('%Y-%m-%d')
@@ -363,9 +362,9 @@ def prev_check_open_day():
     check_today_is_open_day(curr_date)
 
 
-# ================
+# -----------------------
 # 持仓自动发现
-# ================
+# -----------------------
 def update_position_held(lock: threading.Lock, delegate: XtDelegate, path: str):
     with lock:
         positions = delegate.check_positions()
@@ -391,9 +390,9 @@ def update_position_held(lock: threading.Lock, delegate: XtDelegate, path: str):
         save_json(path, held_days)
 
 
-# ================================
+# -----------------------
 # 订阅单个股票历史N个分钟级K线
-# ================================
+# -----------------------
 def sub_quote(
     callback: Callable,
     code: str,
