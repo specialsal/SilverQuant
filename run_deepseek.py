@@ -44,7 +44,7 @@ def debug(*args):
 
 
 class PoolConf:
-    white_prefixes = {'00', '60', '30', '68'}
+    white_prefixes = {'00', '60', '30'}
     black_prompts = [
         'ST',
         '退市',
@@ -56,13 +56,13 @@ class PoolConf:
 
 
 class BuyConf:
-    time_ranges = [['14:45', '14:57']]
+    time_ranges = [['14:55', '14:57']]
     interval = 15
     order_premium = 0.05    # 保证成功买入成交的溢价
 
-    slot_count = 20         # 持股数量上限
-    slot_capacity = 5000    # 每个仓的资金上限
-    once_buy_limit = 20     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
+    slot_count = 30         # 持股数量上限
+    slot_capacity = 10000   # 每个仓的资金上限
+    once_buy_limit = 30     # 单次选股最多买入股票数量（若单次未买进当日不会再买这只
 
     inc_limit = 1.20        # 相对于昨日收盘的涨幅限制
     min_price = 3.00        # 限制最低可买入股票的现价
@@ -74,18 +74,24 @@ class SellConf:
     order_premium = 0.05            # 保证成功卖出成交的溢价
 
     switch_time_range = ['14:30', '14:57']
-    switch_hold_days = 2            # 持仓天数
+    switch_hold_days = 5            # 持仓天数
     switch_demand_daily_up = 0.002  # 换仓上限乘数
 
     hard_time_range = ['09:31', '14:57']
     earn_limit = 9.999              # 硬性止盈率
-    risk_limit = 1 - 0.03           # 硬性止损率
+    risk_limit = 1 - 0.05           # 硬性止损率
     risk_tight = 0.002              # 硬性止损率每日上移
 
     fall_time_range = ['09:31', '14:57']
     fall_from_top = [
-        (1.02, 9.99, 0.02),
-        (1.01, 1.02, 0.05),
+        (1.05, 9.99, 0.02),
+        (1.02, 1.05, 0.05),
+    ]
+
+    return_time_range = ['09:31', '14:57']
+    return_of_profit = [
+        (1.07, 9.99, 0.35),
+        (1.02, 1.07, 0.95),
     ]
 
 

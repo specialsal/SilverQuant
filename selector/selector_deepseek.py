@@ -31,7 +31,7 @@
     COND_放量:= V > VOL_基准 * 放量倍数 AND C > REF(HHV(H, 动量周期),1);  {放量突破近期高点}
 
     {价格动量}
-    RSI_动量:= SMA(MAX(C-REF(C,1),0, 动量周期)/SMA(ABS(C-REF(C,1)), 动量周期)*100;  {动量RSI}
+    RSI_动量:= SMA(MAX(C-REF(C,1),0), 动量周期)/SMA(ABS(C-REF(C,1)), 动量周期)*100;  {动量RSI}
     COND_动量:= RSI_动量 > 60 AND RSI_动量 > REF(RSI_动量, 3);  {动量持续增强}
 
     {————— 核心条件3：风险控制模块 —————}
