@@ -63,14 +63,17 @@ class SellConf:
     interval = 1                    # 扫描买入间隔，60的约数：1-6, 10, 12, 15, 20, 30
     order_premium = 0.02            # 保证市价单成交的溢价，单位（元）
 
-    switch_time_range = ['14:30', '14:57']
-    switch_hold_days = 3            # 持仓天数
-    switch_demand_daily_up = 0.003  # 要求每日涨幅
-
     hard_time_range = ['09:31', '14:57']
     earn_limit = 9.999              # 硬性止盈率
     risk_limit = 1 - 0.03           # 硬性止损率
     risk_tight = 0.002              # 硬性止损率每日上移
+
+    # 利润从最高点回撤卖出
+    fall_time_range = ['09:31', '14:57']
+    fall_from_top = [
+        (1.08, 9.99, 0.02),
+        (1.02, 1.08, 0.05),
+    ]
 
     # 涨幅超过建仓价xA，并小于建仓价xB 时，回撤涨幅的C倍卖出
     # (A, B, C)
