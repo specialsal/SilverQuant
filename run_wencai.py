@@ -202,7 +202,7 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
 
 def scan_sell(quotes: Dict, curr_date: str, curr_time: str, positions: List) -> None:
     max_prices, held_days = update_max_prices(lock_of_disk_cache, quotes, positions, PATH_MAXP, PATH_HELD)
-    my_seller.execute_sell(quotes, curr_date, curr_time, positions, held_days, max_prices, cache_history)
+    my_seller.execute_sell(quotes, curr_date, curr_time, positions, held_days, max_prices, my_suber.cache_history)
 
 
 # ======== 框架 ========
