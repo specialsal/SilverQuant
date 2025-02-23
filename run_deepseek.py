@@ -50,8 +50,8 @@ class PoolConf:
         '退市',
         '近一周大股东减持',
     ]
-    day_count = 120          # 70个足够算出周期为60的均线数据
-    price_adjust = 'qfq'     # 历史价格复权
+    day_count = 80          # 80个足够算出周期为60的均线数据
+    price_adjust = 'qfq'    # 历史价格复权
     columns = ['datetime', 'open', 'high', 'low', 'close', 'volume', 'amount']
 
 
