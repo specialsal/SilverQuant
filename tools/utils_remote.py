@@ -5,7 +5,7 @@ from typing import Optional
 
 import akshare as ak
 import pywencai
-from tools.utils_basic import is_symbol, code_to_symbol
+from tools.utils_basic import is_symbol, is_stock, code_to_symbol
 
 
 def get_wencai_codes(queries: list[str]) -> list[str]:
@@ -54,7 +54,7 @@ def get_ak_daily_history(
     columns: list[str] = None,
     adjust='',
 ):
-    if not is_symbol(code):
+    if not is_stock(code):
         return None
 
     try:
