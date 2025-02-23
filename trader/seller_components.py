@@ -54,7 +54,7 @@ class SwitchSeller(BaseSeller):
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
 
-        if (held_day > self.switch_hold_days) and (self.switch_time_range[0] <= curr_time < self.switch_time_range[1]):
+        if (held_day >= self.switch_hold_days) and (self.switch_time_range[0] <= curr_time < self.switch_time_range[1]):
             curr_price = quote['lastPrice']
             cost_price = position.open_price
             sell_volume = position.can_use_volume
