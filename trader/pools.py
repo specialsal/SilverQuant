@@ -1,4 +1,5 @@
-from typing import Set
+import pandas as pd
+from typing import Set, Callable
 
 from tools.utils_basic import symbol_to_code
 from tools.utils_cache import get_prefixes_stock_codes, get_index_constituent_codes
@@ -42,13 +43,16 @@ class StockPool:
         self.cache_whitelist.clear()
 
 # -----------------------
-# Black Wencai
+# Black Empty
 # -----------------------
 
 class StocksPoolBlackEmpty(StockPool):
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
         super().__init__(account_id, strategy_name, parameters, ding_messager)
 
+# -----------------------
+# Black Wencai
+# -----------------------
 
 class StocksPoolBlackWencai(StockPool):
     def __init__(self, account_id: str, strategy_name: str, parameters, ding_messager):
@@ -196,3 +200,18 @@ class StocksPoolWhitePrefixesConcept(StocksPoolBlackWencai):
         t_white_codes = get_ths_concept_stock_codes(section_names)
         filter_codes = [code for code in t_white_codes if code[:2] in self.white_prefixes]
         self.cache_whitelist.update(filter_codes)
+
+# -----------------------
+# Filter Whitelist buy selector
+# -----------------------
+
+# 删除不符合模式和没有缓存的票池
+def filter_white_list_by_selector(pool: StockPool, selector: Callable, cache_history: dict[str, pd.DataFrame]):
+    for code in pool.cache_whitelist:
+        if code in cache_history:
+            # 预筛公式没入不需要使用quote所以传None
+            df = selector(cache_history[code], code, None)
+            if not df['PASS'].values[-1]:
+                pool.cache_whitelist.remove(code)
+        else:
+            pool.cache_whitelist.remove(code)
