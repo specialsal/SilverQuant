@@ -280,11 +280,13 @@ if __name__ == '__main__':
     schedule.every().day.at('08:05').do(held_increase)
     schedule.every().day.at('08:10').do(refresh_code_list)
 
-    if '08:15' < temp_time < '15:30' and check_today_is_open_day(temp_date):
+    if '08:05' < temp_time < '15:30' and check_today_is_open_day(temp_date):
         held_increase()
-        refresh_code_list()
 
-        if '09:30' <= temp_time <= '11:30' or '13:00' <= temp_time <= '14:57':
+        if '08:10' < temp_time < '14:57':
+            refresh_code_list()
+
+        if '09:25' < temp_time < '11:30' or '13:00' <= temp_time < '14:57':
             my_suber.subscribe_tick()  # 重启时如果在交易时间则订阅Tick
 
     try:
