@@ -386,6 +386,8 @@ def update_position_held(lock: threading.Lock, delegate: XtDelegate, path: str):
                 if len(code) > 0 and code[0] != '_':
                     if code not in position_codes:
                         del held_days[code]
+        else:
+            print('当前空仓！')
 
         save_json(path, held_days)
 

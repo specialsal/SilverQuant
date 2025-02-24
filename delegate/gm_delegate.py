@@ -78,7 +78,7 @@ class GmDelegate(BaseDelegate):
 
     def check_positions(self) -> List[GmPosition]:
         positions = get_positions(self.account)
-        return [GmPosition(position) for position in positions]
+        return [GmPosition(position) for position in positions if position.volume > 0]
 
     def order_market_open(
         self,

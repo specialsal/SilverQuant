@@ -13,7 +13,7 @@ from tools.utils_remote import append_ak_daily_dict
 from delegate.xt_subscriber import XtSubscriber, update_position_held
 
 from trader.buyer import BaseBuyer as Buyer
-from trader.pools import StocksPoolWhitePrefixesConcept as Pool
+from trader.pools import StocksPoolWhitePrefixes as Pool
 from trader.seller_groups import DeepseekGroupSeller as Seller
 
 from selector.selector_deepseek import select
@@ -220,8 +220,8 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
         available_slot = available_cash // BuyConf.slot_capacity
 
         buy_count = max(0, BuyConf.slot_count - position_count)   # 确认剩余的仓位
-        buy_count = min(buy_count, available_slot)                      # 确认现金够用
-        buy_count = min(buy_count, len(selections))                     # 确认选出的股票够用
+        buy_count = min(buy_count, available_slot)                # 确认现金够用
+        buy_count = min(buy_count, len(selections))               # 确认选出的股票够用
         buy_count = min(buy_count, BuyConf.once_buy_limit)        # 限制一秒内下单数量
         buy_count = int(buy_count)
 

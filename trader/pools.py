@@ -42,6 +42,24 @@ class StockPool:
     def refresh_white(self):
         self.cache_whitelist.clear()
 
+    # 删除不符合模式和没有缓存的票池
+    def filter_white_list_by_selector(self, selector: Callable, cache_history: dict[str, pd.DataFrame]):
+        remove_list = []
+
+        for code in self.cache_whitelist:
+            if code in cache_history:
+                df = selector(cache_history[code], code, None)  # 预筛公式默认不需要使用quote所以传None
+                if not df['PASS'].values[-1]:
+                    remove_list.append(code)
+            else:
+                remove_list.append(code)
+
+        for code in remove_list:
+            self.cache_whitelist.discard(code)
+
+        self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:筛除{len(remove_list)}支\n')
+
+
 # -----------------------
 # Black Empty
 # -----------------------
@@ -200,18 +218,3 @@ class StocksPoolWhitePrefixesConcept(StocksPoolBlackWencai):
         t_white_codes = get_ths_concept_stock_codes(section_names)
         filter_codes = [code for code in t_white_codes if code[:2] in self.white_prefixes]
         self.cache_whitelist.update(filter_codes)
-
-# -----------------------
-# Filter Whitelist buy selector
-# -----------------------
-
-# 删除不符合模式和没有缓存的票池
-def filter_white_list_by_selector(pool: StockPool, selector: Callable, cache_history: dict[str, pd.DataFrame]):
-    for code in pool.cache_whitelist:
-        if code in cache_history:
-            # 预筛公式没入不需要使用quote所以传None
-            df = selector(cache_history[code], code, None)
-            if not df['PASS'].values[-1]:
-                pool.cache_whitelist.remove(code)
-        else:
-            pool.cache_whitelist.remove(code)

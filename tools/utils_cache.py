@@ -18,21 +18,21 @@ TRADE_DAY_CACHE_PATH = '_cache/_open_day_list_sina.csv'
 
 # 指数常量
 class IndexSymbol:
-    INDEX_SH_ZS = '000001'
-    INDEX_SH_50 = '000016'
-    INDEX_SZ_CZ = '399001'
-    INDEX_SZ_50 = '399850'
-    INDEX_SZ_100 = '399330'
-    INDEX_HS_300 = '000300'
-    INDEX_ZZ_100 = '000903'
-    INDEX_ZZ_500 = '000905'
-    INDEX_ZZ_800 = '000906'
-    INDEX_ZZ_1000 = '000852'
-    INDEX_ZZ_2000 = '932000'
-    INDEX_ZZ_ALL = '000985'
-    INDEX_CY_ZS = '399006'
-    INDEX_KC_50 = '000688'
-    INDEX_ZX_100 = '399005'
+    INDEX_SH_ZS = '000001'      # 上证指数
+    INDEX_SH_50 = '000016'      # 上证50
+    INDEX_SZ_CZ = '399001'      # 深证指数
+    INDEX_SZ_50 = '399850'      # 深证50
+    INDEX_SZ_100 = '399330'     # 深证100
+    INDEX_HS_300 = '000300'     # 沪深300
+    INDEX_ZZ_100 = '000903'     # 中证100
+    INDEX_ZZ_500 = '000905'     # 中证500
+    INDEX_ZZ_800 = '000906'     # 中证800
+    INDEX_ZZ_1000 = '000852'    # 中证1000
+    INDEX_ZZ_2000 = '932000'    # 中证2000
+    INDEX_ZZ_ALL = '000985'     # 中证全指
+    INDEX_CY_ZS = '399006'      # 创业指数
+    INDEX_KC_50 = '000688'      # 科创50
+    INDEX_ZX_100 = '399005'     # 中小100
 
 
 # 查询股票名称
