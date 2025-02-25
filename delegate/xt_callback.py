@@ -2,6 +2,8 @@ import threading
 import datetime
 import logging
 
+from typing import Callable
+
 from xtquant import xtconstant
 from xtquant.xttrader import XtQuantTraderCallback
 from xtquant.xttype import XtOrder, XtTrade, XtOrderError, XtCancelError, XtOrderResponse, XtCancelOrderResponse
