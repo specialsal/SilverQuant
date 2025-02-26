@@ -93,7 +93,7 @@ from mytt.MyTT_custom import *
 
 
 def select(df: pd.DataFrame, code: str, quote: dict):
-    if len(df.close) < 120:
+    if len(df.close) < 90:
         df['PASS'] = False
         return df
 
