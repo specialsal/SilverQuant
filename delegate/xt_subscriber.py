@@ -135,7 +135,8 @@ class XtSubscriber:
             return
 
         if self.ding_messager is not None:
-            self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:{"启动" if notice else "恢复"}')
+            self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:'
+                                         f'{"启动" if notice else "恢复"} {len(self.code_list)}支')
         self.cache_limits['sub_seq'] = xtdata.subscribe_whole_quote(self.code_list, callback=self.callback_sub_whole)
         xtdata.enable_hello = False
         print('[启动行情订阅]', end='')
@@ -146,7 +147,8 @@ class XtSubscriber:
 
         if 'sub_seq' in self.cache_limits:
             if self.ding_messager is not None:
-                self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:{"关闭" if notice else "暂停"}')
+                self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:'
+                                             f'{"关闭" if notice else "暂停"}')
             xtdata.unsubscribe_quote(self.cache_limits['sub_seq'])
             print('\n[关闭行情订阅]')
 
@@ -168,12 +170,12 @@ class XtSubscriber:
             tick_time = datetime.datetime.fromtimestamp(quote['time'] / 1000).strftime('%H:%M:%S')
             self.today_ticks[code].append([
                 tick_time,                          # 成交时间，格式：%H:%M:%S
-                round(quote['lastPrice'], 2),       # 成交价格
-                round(quote['volume'], 0),          # 累计成交量（手）
-                round(quote['askPrice'][0], 2),     # 卖一价格
-                round(quote['askVol'][0], 2),       # 卖一数量
-                round(quote['bidPrice'][0], 2),     # 买一价格
-                round(quote['bidVol'][0], 2),       # 买一数量
+                round(quote['lastPrice'], 3),       # 成交价格
+                int(quote['volume']),          # 累计成交量（手）
+                round(quote['askPrice'][0], 3),     # 卖一价
+                int(quote['askVol'][0]),            # 卖一量
+                round(quote['bidPrice'][0], 3),     # 买一价
+                int(quote['bidVol'][0]),            # 买一量
             ])
 
     def clean_ticks_history(self):

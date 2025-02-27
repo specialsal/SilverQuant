@@ -22,10 +22,10 @@ class GmAsset:
     def __init__(self, cash: Cash):
         self.account_type = 0
         self.account_id = cash.account_id
-        self.cash = round(cash.available, 2)
-        self.frozen_cash = round(cash.order_frozen, 2)
-        self.market_value = round(cash.frozen, 2)
-        self.total_asset = round(cash.nav, 2)
+        self.cash = round(cash.available, 3)
+        self.frozen_cash = round(cash.order_frozen, 3)
+        self.market_value = round(cash.frozen, 3)
+        self.total_asset = round(cash.nav, 3)
 
 
 class GmOrder:

@@ -322,8 +322,7 @@ class DropSeller(BaseSeller):
         BaseSeller.__init__(self, strategy_name, delegate, parameters)
         print('高开出货卖出', end=' ')
         self.drop_time_range = parameters.drop_time_range
-        self.drop_rate_limit = parameters.drop_rate_limit
-        self.high_open_limit = parameters.high_open_limit
+        self.drop_out_limits = parameters.drop_out_limits
 
     def check_sell(self, code: str, quote: Dict, curr_date: str, curr_time: str, position: XtPosition,
                    held_day: int, max_price: Optional[float], history: Optional[pd.DataFrame]) -> bool:
@@ -332,13 +331,18 @@ class DropSeller(BaseSeller):
             sell_volume = position.can_use_volume
 
             if quote['lastPrice'] < quote['open'] \
-                    and round(quote['low'], 2) == round(quote['lastPrice'], 2) \
-                    and round(quote['open'], 2) == round(quote['high'], 2):
+                    and round(quote['low'], 3) == round(quote['lastPrice'], 3) \
+                    and round(quote['open'], 3) == round(quote['high'], 3):
 
-                if (quote['open'] - quote['lastPrice']) / quote['lastClose'] > self.drop_rate_limit \
-                        and quote['open'] / quote['lastClose'] > self.high_open_limit:
-                    self.order_sell(code, quote, sell_volume, f'高开出货')
-                return True
+                last_close = quote['lastClose']
+                open_price = quote['open']
+                drop_price = quote['open'] - quote['lastPrice']
+
+                for inc_min, inc_max, drop_threshold in self.drop_out_limits:  # 逐级高开卖出
+                    if last_close * inc_min <= open_price < last_close * inc_max \
+                            and drop_price > last_close * drop_threshold:
+                        self.order_sell(code, quote, sell_volume, f'高开出货')
+                    return True
 
         return False
 
@@ -356,8 +360,8 @@ class IncBlocker(BaseSeller):
 
         if held_day > 0:
             if quote['lastPrice'] > quote['open'] \
-                    and round(quote['high'], 2) == round(quote['lastPrice'], 2) \
-                    and round(quote['open'], 2) == round(quote['low'], 2):
+                    and round(quote['high'], 3) == round(quote['lastPrice'], 3) \
+                    and round(quote['open'], 3) == round(quote['low'], 3):
                 return True
         return False
 

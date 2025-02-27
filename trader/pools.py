@@ -57,7 +57,8 @@ class StockPool:
         for code in remove_list:
             self.cache_whitelist.discard(code)
 
-        self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:筛除{len(remove_list)}支\n')
+        if self.ding_messager is not None:
+            self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:筛除{len(remove_list)}支\n')
 
 
 # -----------------------
