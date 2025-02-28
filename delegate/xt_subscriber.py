@@ -245,16 +245,21 @@ class XtSubscriber:
     # -----------------------
     # 盘后报告总结
     # -----------------------
-    def check_asset(self):
+    def daily_summary(self):
         curr_date = datetime.datetime.now().strftime('%Y-%m-%d')
         if not check_today_is_open_day(curr_date):
             return
 
+        self.today_deal_report(today=curr_date)
+        self.today_hold_report(today=curr_date)
+        self.check_asset(today=curr_date)
+
+    def check_asset(self, today):
         asset = self.delegate.check_asset()
         title = f'[{self.account_id}]{self.strategy_name} 盘后清点'
         txt = title
 
-        increase = get_total_asset_increase(self.path_assets, curr_date, asset.total_asset)
+        increase = get_total_asset_increase(self.path_assets, today, asset.total_asset)
         if increase is not None:
             txt += '\n>\n> '
             txt += f'当日变动: {"+" if increase > 0 else ""}{round(increase, 2)}元' \
@@ -272,15 +277,11 @@ class XtSubscriber:
         if self.ding_messager is not None:
             self.ding_messager.send_markdown(title, txt)
 
-    def today_deal_report(self):
-        today = datetime.datetime.now().strftime('%Y-%m-%d')
-        if not check_today_is_open_day(today):
-            return
-
-        if not os.path.exists(self.path_deal):
-            return
-
+    def today_deal_report(self, today):
         if self.open_today_deal_report:
+            if not os.path.exists(self.path_deal):
+                return
+
             df = pd.read_csv(self.path_deal, encoding='gbk')
             if '日期' in df.columns:
                 df = df[df['日期'] == today]
@@ -298,11 +299,7 @@ class XtSubscriber:
                 if self.ding_messager is not None:
                     self.ding_messager.send_markdown(title, txt)
 
-    def today_hold_report(self):
-        today = datetime.datetime.now().strftime('%Y-%m-%d')
-        if not check_today_is_open_day(today):
-            return
-
+    def today_hold_report(self, today):
         if self.open_today_hold_report:
             positions = self.delegate.check_positions()
             txt = ''
@@ -338,10 +335,7 @@ class XtSubscriber:
 
         schedule.every().day.at('13:00').do(self.subscribe_tick, False)
         schedule.every().day.at('15:00').do(self.unsubscribe_tick)
-
-        schedule.every().day.at('15:01').do(self.today_deal_report)
-        schedule.every().day.at('15:02').do(self.today_hold_report)
-        schedule.every().day.at('15:03').do(self.check_asset)
+        schedule.every().day.at('15:01').do(self.daily_summary)
 
         monitor_time_list = [
             '09:35', '09:45', '09:55', '10:05', '10:15', '10:25',

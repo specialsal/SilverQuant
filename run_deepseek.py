@@ -79,7 +79,7 @@ class SellConf:
 
     hard_time_range = ['09:31', '14:57']
     earn_limit = 9.999              # 硬性止盈率
-    risk_limit = 1 - 0.05           # 硬性止损率
+    risk_limit = 1 - 0.03           # 硬性止损率
     risk_tight = 0.002              # 硬性止损率每日上移
 
     fall_time_range = ['09:31', '14:57']

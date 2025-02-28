@@ -118,7 +118,8 @@ def pull_stock_codes() -> List[str]:
     codes_top = []
 
     for code in codes_wencai:
-        codes_top.append(code)
+        if (code in my_pool.cache_whitelist) and (code not in my_pool.cache_blacklist):
+            codes_top.append(code)
 
     return codes_top
 

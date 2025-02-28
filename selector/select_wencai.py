@@ -3,10 +3,18 @@ https://www.iwencai.com/
 """
 import datetime
 import pywencai
-# from selector.select_queries import *
+from selector.select_prompts import prompts
 
-select_query = "中证500成分股，非ST，非科创，MACD金叉，按价格从小到大"  # 这里自定义问财选股的问句prompt
-print('选股问句：', select_query, '\n')
+
+default_prompt = "中证500成分股，非ST，非科创，MACD金叉，按价格从小到大"  # 这里自定义问财选股的问句prompt
+
+
+def get_prompt(prompt_number: int = 0):
+    ans = default_prompt
+    if prompt_number < len(prompts):
+        ans = prompts[prompt_number]
+    print('选股问句：', ans, '\n')
+    return ans
 
 
 def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
@@ -41,7 +49,7 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
 
 
 if __name__ == '__main__':
-    a = get_wencai_codes_prices([select_query], debugging=True)
+    a = get_wencai_codes_prices([default_prompt], debugging=True)
     print(a)
     i = 0
     for k in a:
