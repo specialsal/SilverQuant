@@ -61,7 +61,7 @@ class SwitchSeller(BaseSeller):
             switch_upper = cost_price * (1 + held_day * self.switch_demand_daily_up)
 
             if curr_price < switch_upper:  # 未满足盈利目标的仓位
-                self.order_sell(code, quote, sell_volume, '换仓卖单')
+                self.order_sell(code, quote, sell_volume, f'{self.switch_hold_days}日换仓卖单')
                 return True
         return False
 
@@ -121,7 +121,8 @@ class ReturnSeller(BaseSeller):
                         logging.warning(f'[Sell]'
                                         f'cost_p:{cost_price} max_p:{max_price} '
                                         f'inc_min:{inc_min} inc_max:{inc_max}')
-                        self.order_sell(code, quote, sell_volume, f'回撤{int(fall_percentage * 100)}%')
+                        self.order_sell(code, quote, sell_volume,
+                                        f'涨{int((inc_min - 1) * 100)}回撤{int(fall_percentage * 100)}%')
                         return True
         return False
 
@@ -173,7 +174,7 @@ class OpenDaySeller(BaseSeller):
 
                 # 建仓日新低破掉卖
                 if curr_price < open_day_low:
-                    self.order_sell(code, quote, sell_volume, '建日破低')
+                    self.order_sell(code, quote, sell_volume, '破开仓日新低')
                     return True
 
                 # 建仓日尾盘缩量卖出
@@ -182,7 +183,7 @@ class OpenDaySeller(BaseSeller):
                         curr_volume = quote['volume']
                         open_day_volume = history['volume'].values[-held_day] * self.open_vol_rate
                         if curr_volume < open_day_volume:
-                            self.order_sell(code, quote, sell_volume, '建日缩量')
+                            self.order_sell(code, quote, sell_volume, '缩开仓日地量')
                             return True
         return False
 
@@ -212,7 +213,7 @@ class MASeller(BaseSeller):
                 ma_value = ma_values[-1]
 
                 if curr_price < ma_value - 0.01:
-                    self.order_sell(code, quote, sell_volume, '破均卖单')
+                    self.order_sell(code, quote, sell_volume, f'破{self.ma_above}日均线')
                     return True
         return False
 
@@ -241,11 +242,11 @@ class CCISeller(BaseSeller):
                 cci = df['CCI'].tail(2).values
 
                 if cci[0] > self.cci_lower > cci[1]:  # CCI 下穿
-                    self.order_sell(code, quote, sell_volume, '低CCI卖')
+                    self.order_sell(code, quote, sell_volume, f'CCI高于{self.cci_lower}')
                     return True
 
                 if cci[0] < self.cci_upper < cci[1]:  # CCI 上穿
-                    self.order_sell(code, quote, sell_volume, '高CCI卖')
+                    self.order_sell(code, quote, sell_volume, f'CCI低于{self.cci_upper}')
                     return True
         return False
 
@@ -276,7 +277,7 @@ class WRSeller(BaseSeller):
                 wr = df['WR'].tail(2).values
 
                 if wr[0] < self.wr_cross < wr[1]:  # WR 上穿
-                    self.order_sell(code, quote, sell_volume, 'WR上穿卖')
+                    self.order_sell(code, quote, sell_volume, f'WR上穿{self.wr_cross}卖')
                     return True
         return False
 
@@ -341,8 +342,9 @@ class DropSeller(BaseSeller):
                 for inc_min, inc_max, drop_threshold in self.drop_out_limits:  # 逐级高开卖出
                     if last_close * inc_min <= open_price < last_close * inc_max \
                             and drop_price > last_close * drop_threshold:
-                        self.order_sell(code, quote, sell_volume, f'高开出货')
-                    return True
+                        self.order_sell(code, quote, sell_volume,
+                                        f'高开{int((inc_min - 1) * 100)}跌{int(drop_threshold * 100)}%')
+                        return True
 
         return False
 
