@@ -44,7 +44,7 @@ def debug(*args):
 
 
 class PoolConf:
-    white_indexes = []
+    white_indexes = [IndexSymbol.INDEX_ZZ_ALL]
     black_prompts = ['ST', '退市']
 
 
