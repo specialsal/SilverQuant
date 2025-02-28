@@ -16,8 +16,9 @@ from trader.buyer import BaseBuyer as Buyer
 from trader.pools import StocksPoolWhiteIndexes as Pool
 from trader.seller_groups import ClassicGroupSeller as Seller
 
-from selector.select_wencai import get_wencai_codes_prices, select_query
+from selector.select_wencai import get_wencai_codes_prices, get_prompt
 
+select_prompt = get_prompt()
 
 STRATEGY_NAME = '问财选股'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
@@ -114,7 +115,7 @@ def refresh_code_list():
 
 
 def pull_stock_codes() -> List[str]:
-    codes_wencai = get_wencai_codes_prices(select_query)
+    codes_wencai = get_wencai_codes_prices(select_prompt)
     codes_top = []
 
     for code in codes_wencai:
