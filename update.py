@@ -2,7 +2,7 @@ import os
 
 
 def git_pull():
-    os.system('pip install --upgrade pip')
+    os.system('python -m pip install --upgrade pip')
     os.system('pip install --upgrade akshare')
     os.system('pip install --upgrade pywencai')
 
