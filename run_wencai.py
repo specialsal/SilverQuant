@@ -292,6 +292,8 @@ if __name__ == '__main__':
         path_assets=PATH_ASSETS,
         execute_strategy=execute_strategy,
         ding_messager=DING_MESSAGER,
+        open_today_deal_report=True,
+        open_today_hold_report=True,
     )
     my_suber.start_scheduler()
 

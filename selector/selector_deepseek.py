@@ -132,16 +132,13 @@ def select(df: pd.DataFrame, code: str, quote: dict):
     # 流动性过滤
     COND_流动性 = V > MA(V, 30) * 0.5  # 成交量不低于30日均量的一半
 
-    # ————— 条件3：低开风险过滤 —————
-    上影率 = (H - MAX(C, O)) / (H - L) < 0.3
-
     # ————— 综合选股条件 —————
     # 趋势处于强势阶段
     # 量价突破关键位
     # 短期动量加速
     # 波动率可控
     # 基础流动性保障
-    选股信号 = COND_趋势 & COND_放量 & COND_动量 & COND_波动 & COND_流动性 & 上影率
+    选股信号 = COND_趋势 & COND_放量 & COND_动量 & COND_波动 & COND_流动性
 
     df['PASS'] = 选股信号
 
