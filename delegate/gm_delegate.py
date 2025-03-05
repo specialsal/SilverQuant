@@ -239,12 +239,26 @@ class GmDelegate(BaseDelegate):
     # order_cancel(wait_cancel_orders=orders)
 
     def order_cancel_buy(self, code: str):
-        # TODO 撤单
-        pass
+        orders = get_orders()
+        candidate = []
+        for order in orders:
+            if order.side == OrderSide_Buy:
+                candidate.append({
+                    'symbol': code_to_gmsymbol(code),
+                    'cl_ord_id': order.cl_ord_id,
+                })
+        order_cancel(candidate)
 
     def order_cancel_sell(self, code: str):
-        # TODO 撤单
-        pass
+        orders = get_orders()
+        candidate = []
+        for order in orders:
+            if order.side == OrderSide_Sell:
+                candidate.append({
+                    'symbol': code_to_gmsymbol(code),
+                    'cl_ord_id': order.cl_ord_id,
+                })
+        order_cancel(candidate)
 
 
 def is_position_holding(position: GmPosition) -> bool:
