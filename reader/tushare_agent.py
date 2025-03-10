@@ -1,10 +1,3 @@
-import random
-
-my_token = [
-    ['(your token)', '(your id)'],
-]
-
-
 ts_pro_api = None
 
 
@@ -12,10 +5,12 @@ def get_tushare_pro(account_number=None):
     global ts_pro_api
     if ts_pro_api is None:
         import tushare as ts
+        import random
+        from reader.tushare_token import ts_token
         if account_number is None:
-            account_number = random.randint(0, len(my_token) - 1)
+            account_number = random.randint(0, len(ts_token) - 1)
         # print("Account token from account number: " + str(account_number))
-        ts.set_token(my_token[account_number][0])
+        ts.set_token(ts_token[account_number][0])
         ts_pro_api = ts.pro_api()
     return ts_pro_api
 
