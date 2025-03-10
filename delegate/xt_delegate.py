@@ -163,9 +163,9 @@ class XtDelegate(BaseDelegate):
         else:
             raise Exception('xt_trader为空')
 
-    def check_orders(self) -> List[XtOrder]:
+    def check_orders(self, cancelable_only = False) -> List[XtOrder]:
         if self.xt_trader is not None:
-            return self.xt_trader.query_stock_orders(self.account, False)
+            return self.xt_trader.query_stock_orders(self.account, cancelable_only)
         else:
             raise Exception('xt_trader为空')
 
