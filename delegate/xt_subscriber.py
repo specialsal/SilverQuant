@@ -301,7 +301,7 @@ class XtSubscriber:
                 for index, row in df.iterrows():
                     # ['日期', '时间', '代码', '名称', '类型', '注释', '成交价', '成交量']
                     txt += '\n\n> '
-                    txt += f'{row["时间"]} {row["注释"]} {row["代码"]} '
+                    txt += f'{row["时间"]} {row["注释"]} {code_to_symbol(row["代码"])} '
                     txt += '\n>\n> '
                     txt += f'{row["名称"]} {row["成交量"]}股 {row["成交价"]}元 '
 
