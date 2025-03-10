@@ -13,10 +13,10 @@ from xtquant import xtdata
 
 from delegate.xt_delegate import XtDelegate
 from tools.utils_basic import code_to_symbol
-from tools.utils_cache import check_today_is_open_day, get_total_asset_increase, \
+from tools.utils_cache import check_is_open_day, get_total_asset_increase, \
     load_pickle, save_pickle, load_json, save_json, StockNames
 from tools.utils_ding import DingMessager
-from tools.utils_remote import get_ak_daily_history
+from tools.utils_remote import get_daily_history
 
 
 class XtSubscriber:
@@ -112,7 +112,7 @@ class XtSubscriber:
     def callback_monitor(self):
         now = datetime.datetime.now()
 
-        if not check_today_is_open_day(now.strftime('%Y-%m-%d')):
+        if not check_is_open_day(now.strftime('%Y-%m-%d')):
             return
 
         if now - self.last_callback_time > datetime.timedelta(minutes=1):
@@ -131,7 +131,7 @@ class XtSubscriber:
     # 订阅tick相关
     # -----------------------
     def subscribe_tick(self, notice=True):
-        if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        if not check_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
             return
 
         if self.ding_messager is not None:
@@ -142,7 +142,7 @@ class XtSubscriber:
         print('[启动行情订阅]', end='')
 
     def unsubscribe_tick(self, notice=True):
-        if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        if not check_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
             return
 
         if 'sub_seq' in self.cache_limits:
@@ -179,14 +179,14 @@ class XtSubscriber:
             ])
 
     def clean_ticks_history(self):
-        if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        if not check_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
             return
         self.today_ticks.clear()
         self.today_ticks = {}
         print(f"已清除tick缓存")
 
     def save_tick_history(self):
-        if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+        if not check_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
             return
         json_file = './_cache/debug/tick_history.json'
         with open(json_file, 'w') as file:
@@ -206,7 +206,7 @@ class XtSubscriber:
             time.sleep(1)
             print(i, sub_codes)  # 已更新数量
             for code in sub_codes:
-                df = get_ak_daily_history(code, start, end, columns=columns, adjust=adjust)
+                df = get_daily_history(code, start, end, columns=columns, adjust=adjust)
                 if df is not None:
                     self.cache_history[code] = df
 
@@ -247,7 +247,7 @@ class XtSubscriber:
     # -----------------------
     def daily_summary(self):
         curr_date = datetime.datetime.now().strftime('%Y-%m-%d')
-        if not check_today_is_open_day(curr_date):
+        if not check_is_open_day(curr_date):
             return
 
         self.today_deal_report(today=curr_date)
@@ -355,7 +355,7 @@ def prev_check_open_day():
     curr_date = now.strftime('%Y-%m-%d')
     curr_time = now.strftime('%H:%M')
     print(f'[{curr_time}]', end='')
-    check_today_is_open_day(curr_date)
+    check_is_open_day(curr_date)
 
 
 # -----------------------

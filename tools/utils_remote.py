@@ -5,7 +5,13 @@ from typing import Optional
 
 import akshare as ak
 import pywencai
-from tools.utils_basic import is_symbol, is_stock, code_to_symbol
+
+from reader.tushare_token import get_tushare_pro
+from tools.utils_basic import is_stock, code_to_symbol
+
+
+DATA_SOURCE_AKSHARE = 0
+DATA_SOURCE_TUSHARE = 1
 
 
 def get_wencai_codes(queries: list[str]) -> list[str]:
@@ -84,3 +90,47 @@ def get_ak_daily_history(
         return df
     return None
 
+
+# 使用 tushare 数据源记得 pip install tushare
+# 同时配置 tushare 的 token，在官网注册获取
+# https://tushare.pro/document/2?doc_id=27
+def get_ts_daily_history(
+    code: str,
+    start_date: str,  # format: 20240101
+    end_date: str,
+    columns: list[str] = None,
+    adjust='',
+):
+    pro = get_tushare_pro()
+    df = pro.daily(
+        ts_code=code,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    df = df.rename(columns={
+        'vol': 'volume',
+        'trade_date': 'datetime',
+    })
+    df['volume'] = df['volume'].astype(int)
+    df['amount'] *= 1000
+    df = df[::-1]
+    df.reset_index(drop=True,inplace=True)
+    if len(df) > 0:
+        if columns is not None:
+            # columns += ['ts_code']
+            return df[columns]
+        return df
+    return None
+
+
+def get_daily_history(
+    code: str,
+    start_date: str,  # format: 20240101
+    end_date: str,
+    columns: list[str] = None,
+    adjust='',
+    data_source=DATA_SOURCE_AKSHARE,
+):
+    if data_source == DATA_SOURCE_TUSHARE:
+        return get_ts_daily_history(code, start_date, end_date, columns, adjust)
+    return get_ak_daily_history(code, start_date, end_date, columns, adjust)

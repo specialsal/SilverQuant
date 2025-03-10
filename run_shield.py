@@ -99,7 +99,7 @@ class SellConf:
 
 
 def held_increase() -> None:
-    if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+    if not check_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
 
     update_position_held(lock_of_disk_cache, my_delegate, PATH_HELD)
@@ -109,7 +109,7 @@ def held_increase() -> None:
 
 
 def refresh_code_list():
-    if not check_today_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
+    if not check_is_open_day(datetime.datetime.now().strftime('%Y-%m-%d')):
         return
 
     my_pool.refresh()
@@ -145,7 +145,8 @@ def execute_strategy(curr_date: str, curr_time: str, curr_seconds: str, curr_quo
 
 if __name__ == '__main__':
     logging_init(path=PATH_LOGS, level=logging.INFO)
-    print(f'正在启动 {STRATEGY_NAME}{"" if IS_PROD else "(模拟)"}...')
+    STRATEGY_NAME = STRATEGY_NAME if IS_PROD else STRATEGY_NAME + "(模拟)"
+    print(f'正在启动 {STRATEGY_NAME}...')
     if IS_PROD:
         from delegate.xt_callback import XtCustomCallback
         from delegate.xt_delegate import XtDelegate
@@ -219,7 +220,7 @@ if __name__ == '__main__':
     schedule.every().day.at('08:05').do(held_increase)
     schedule.every().day.at('08:10').do(refresh_code_list)
 
-    if '08:05' < temp_time < '15:30' and check_today_is_open_day(temp_date):
+    if '08:05' < temp_time < '15:30' and check_is_open_day(temp_date):
         held_increase()
 
         if '08:10' < temp_time < '14:57':

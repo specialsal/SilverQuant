@@ -299,7 +299,7 @@ def get_prev_trading_date(now: datetime.datetime, count: int) -> str:
 
 
 # 检查当日是否是交易日，使用sina数据源
-def check_today_is_open_day_sina(curr_date: str) -> bool:
+def check_is_open_day_sina(curr_date: str) -> bool:
     """
     curr_date example: '2024-12-31'
     """
@@ -336,11 +336,11 @@ def check_today_is_open_day_sina(curr_date: str) -> bool:
     return True
 
 
-def check_today_is_open_day(curr_date: str) -> bool:
+def check_is_open_day(curr_date: str) -> bool:
     """
     curr_date example: '2024-12-31'
     """
-    return check_today_is_open_day_sina(curr_date)
+    return check_is_open_day_sina(curr_date)
 
 
 # ==========

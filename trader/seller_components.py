@@ -32,10 +32,10 @@ class HardSeller(BaseSeller):
             switch_lower = cost_price * (self.risk_limit + held_day * self.risk_tight)
 
             if curr_price <= switch_lower:
-                self.order_sell(code, quote, sell_volume, f'硬止损{int((1 - self.risk_limit) * 100)}%')
+                self.order_sell(code, quote, sell_volume, f'跌{int((1 - self.risk_limit) * 100)}%硬止损')
                 return True
             elif curr_price >= cost_price * self.earn_limit:
-                self.order_sell(code, quote, sell_volume, f'硬止盈{int((self.earn_limit - 1) * 100)}%')
+                self.order_sell(code, quote, sell_volume, f'涨{int((self.earn_limit - 1) * 100)}%硬止盈')
                 return True
         return False
 
@@ -91,7 +91,8 @@ class FallSeller(BaseSeller):
                         logging.warning(f'[Sell]'
                                         f'cost_p:{cost_price} max_p:{max_price} '
                                         f'inc_min:{inc_min} inc_max:{inc_max}')
-                        self.order_sell(code, quote, sell_volume, f'涨{int((inc_min - 1) * 100)}%回落')
+                        self.order_sell(code, quote, sell_volume,
+                                        f'涨{int((inc_min - 1) * 100)}%回落{int(fall_threshold * 100)}%')
                         return True
         return False
 
@@ -267,9 +268,6 @@ class WRSeller(BaseSeller):
         if (history is not None) and (self.wr_time_range[0] <= curr_time < self.wr_time_range[1]):
             if held_day > 0 and int(curr_time[-2:]) % 5 == 0:  # 每隔5分钟 WR 卖出
                 sell_volume = position.can_use_volume
-
-                curr_price = quote['lastPrice']
-                curr_vol = quote['volume']
 
                 df = append_ak_daily_dict(history, quote, curr_date)
 
