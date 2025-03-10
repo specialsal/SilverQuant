@@ -16,7 +16,7 @@ from tools.utils_basic import code_to_symbol
 from tools.utils_cache import check_is_open_day, get_total_asset_increase, \
     load_pickle, save_pickle, load_json, save_json, StockNames
 from tools.utils_ding import DingMessager
-from tools.utils_remote import get_daily_history
+from tools.utils_remote import get_daily_history, DATA_SOURCE_AKSHARE
 
 
 class XtSubscriber:
@@ -196,7 +196,15 @@ class XtSubscriber:
     # -----------------------
     # 盘前下载数据缓存
     # -----------------------
-    def download_from_akshare(self, target_codes: list, start: str, end: str, adjust: str, columns: list[str]):
+    def download_from_remote(
+        self,
+        target_codes: list,
+        start: str,
+        end: str,
+        adjust: str,
+        columns: list[str],
+        data_source: int,
+    ):
         print(f'Prepared time range: {start} - {end}')
         t0 = datetime.datetime.now()
 
@@ -206,7 +214,7 @@ class XtSubscriber:
             time.sleep(1)
             print(i, sub_codes)  # 已更新数量
             for code in sub_codes:
-                df = get_daily_history(code, start, end, columns=columns, adjust=adjust)
+                df = get_daily_history(code, start, end, columns=columns, adjust=adjust, data_source=data_source)
                 if df is not None:
                     self.cache_history[code] = df
 
@@ -221,6 +229,7 @@ class XtSubscriber:
         end: str,
         adjust: str,
         columns: list[str],
+        data_source: int = DATA_SOURCE_AKSHARE,
     ):
         temp_indicators = load_pickle(cache_path)
         if temp_indicators is not None and len(temp_indicators) > 0:
@@ -235,7 +244,7 @@ class XtSubscriber:
             # 如果没缓存就刷新白名单
             self.cache_history.clear()
             self.cache_history = {}
-            self.download_from_akshare(code_list, start, end, adjust, columns)
+            self.download_from_remote(code_list, start, end, adjust, columns, data_source)
             save_pickle(cache_path, self.cache_history)
             print(f'{len(self.cache_history)} of {len(code_list)} histories saved to {cache_path}')
             if self.ding_messager is not None:
