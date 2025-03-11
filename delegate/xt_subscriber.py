@@ -16,7 +16,7 @@ from tools.utils_basic import code_to_symbol
 from tools.utils_cache import check_is_open_day, get_total_asset_increase, \
     load_pickle, save_pickle, load_json, save_json, StockNames
 from tools.utils_ding import DingMessager
-from tools.utils_remote import get_daily_history, DATA_SOURCE_AKSHARE
+from tools.utils_remote import get_daily_history, get_ts_daily_histories, DataSource
 
 
 class XtSubscriber:
@@ -213,10 +213,18 @@ class XtSubscriber:
             sub_codes = [sub_code for sub_code in target_codes[i:i + group_size]]
             time.sleep(1)
             print(i, sub_codes)  # 已更新数量
-            for code in sub_codes:
-                df = get_daily_history(code, start, end, columns=columns, adjust=adjust, data_source=data_source)
-                if df is not None:
-                    self.cache_history[code] = df
+
+            if data_source == DataSource.TUSHARE:
+                # 使用 TUSHARE 数据源批量下载
+                dfs = get_ts_daily_histories(sub_codes, start, end, columns)
+                self.cache_history.update(dfs)
+                time.sleep(0.1)
+            else:
+                # 默认使用 AKSHARE 数据源
+                for code in sub_codes:
+                    df = get_daily_history(code, start, end, columns=columns, adjust=adjust, data_source=data_source)
+                    if df is not None:
+                        self.cache_history[code] = df
 
         t1 = datetime.datetime.now()
         print(f'Prepared TIME COST: {t1 - t0}')
@@ -229,7 +237,7 @@ class XtSubscriber:
         end: str,
         adjust: str,
         columns: list[str],
-        data_source: int = DATA_SOURCE_AKSHARE,
+        data_source: int = DataSource.AKSHARE,
     ):
         temp_indicators = load_pickle(cache_path)
         if temp_indicators is not None and len(temp_indicators) > 0:
@@ -249,7 +257,6 @@ class XtSubscriber:
             print(f'{len(self.cache_history)} of {len(code_list)} histories saved to {cache_path}')
             if self.ding_messager is not None:
                 self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:下载{len(self.cache_history)}支')
-
 
     # -----------------------
     # 盘后报告总结

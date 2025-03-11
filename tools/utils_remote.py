@@ -10,8 +10,9 @@ from reader.tushare_agent import get_tushare_pro
 from tools.utils_basic import is_stock, code_to_symbol
 
 
-DATA_SOURCE_AKSHARE = 0
-DATA_SOURCE_TUSHARE = 1
+class DataSource:
+    AKSHARE = 0
+    TUSHARE = 1
 
 
 def get_wencai_codes(queries: list[str]) -> list[str]:
@@ -58,9 +59,9 @@ def get_daily_history(
     end_date: str,
     columns: list[str] = None,
     adjust='',
-    data_source=DATA_SOURCE_AKSHARE,
+    data_source=DataSource.AKSHARE,
 ) -> Optional[pd.DataFrame]:
-    if data_source == DATA_SOURCE_TUSHARE:
+    if data_source == DataSource.TUSHARE:
         return get_ts_daily_history(code, start_date, end_date, columns, adjust)
     return get_ak_daily_history(code, start_date, end_date, columns, adjust)
 
@@ -150,7 +151,7 @@ def get_ts_daily_histories(
     start_date: str,
     end_date: str,
     columns: list[str] = None,
-) -> Optional[pd.DataFrame]:
+) -> dict[str, pd.DataFrame]:
     pro = get_tushare_pro()
     try_times = 0
     df = None
@@ -161,9 +162,14 @@ def get_ts_daily_histories(
             end_date=end_date,
         )
 
-    df = ts_to_standard(df)
+    ans = {}
     if len(df) > 0:
-        if columns is not None:
-            return df[['ts_code'] + columns]
-        return df
-    return None
+        for code in codes:
+            temp_df = df[df['ts_code'] == code]
+            temp_df = ts_to_standard(temp_df)
+
+            if columns is None:
+                ans[code] = temp_df
+            else:
+                ans[code] = temp_df[columns]
+    return ans

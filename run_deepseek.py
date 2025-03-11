@@ -8,7 +8,7 @@ from credentials import *
 from tools.utils_basic import logging_init, is_symbol
 from tools.utils_cache import *
 from tools.utils_ding import DingMessager
-from tools.utils_remote import append_ak_daily_dict
+from tools.utils_remote import append_ak_daily_dict, DataSource
 
 from delegate.xt_subscriber import XtSubscriber, update_position_held
 
@@ -141,6 +141,7 @@ def prepare_history() -> None:
         end=end,
         adjust=PoolConf.price_adjust,
         columns=PoolConf.columns,
+        data_source=DataSource.TUSHARE,
     )
 
 
