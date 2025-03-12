@@ -136,15 +136,15 @@ def get_ts_daily_history(
         start_date=start_date,
         end_date=end_date,
     )
-    df = ts_to_standard(df)
     if len(df) > 0:
+        df = ts_to_standard(df)
         if columns is not None:
             return df[columns]
         return df
     return None
 
 
-# 复合版:通过 ts_code 列区分不同的票
+# 复合版:通过返回dict的key区分不同的票，注意总共一次最多8000行会限制长度
 # https://tushare.pro/document/2?doc_id=27
 def get_ts_daily_histories(
     codes: list[str],

@@ -214,17 +214,20 @@ class XtSubscriber:
             time.sleep(1)
             print(i, sub_codes)  # 已更新数量
 
-            if data_source == DataSource.TUSHARE:
-                # 使用 TUSHARE 数据源批量下载
-                dfs = get_ts_daily_histories(sub_codes, start, end, columns)
-                self.cache_history.update(dfs)
-                time.sleep(0.1)
-            else:
-                # 默认使用 AKSHARE 数据源
-                for code in sub_codes:
-                    df = get_daily_history(code, start, end, columns=columns, adjust=adjust, data_source=data_source)
-                    if df is not None:
-                        self.cache_history[code] = df
+            # TUSHARE 批量下载限制总共8000天条数据，所以暂时弃用
+            # if data_source == DataSource.TUSHARE:
+            #     # 使用 TUSHARE 数据源批量下载
+            #     dfs = get_ts_daily_histories(sub_codes, start, end, columns)
+            #     self.cache_history.update(dfs)
+            #     time.sleep(0.1)
+
+            # 默认使用 AKSHARE 数据源
+            for code in sub_codes:
+                df = get_daily_history(code, start, end, columns=columns, adjust=adjust, data_source=data_source)
+                if df is not None:
+                    self.cache_history[code] = df
+                if data_source == DataSource.TUSHARE:
+                    time.sleep(0.1)
 
         t1 = datetime.datetime.now()
         print(f'Prepared TIME COST: {t1 - t0}')
