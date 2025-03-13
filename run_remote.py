@@ -125,6 +125,7 @@ def prepare_history() -> None:
         return
 
     now = datetime.datetime.now()
+    delete_file(PATH_INFO.format((now.isoweekday() + 1) % 7))
     cache_path = PATH_INFO.format(now.isoweekday())
 
     start = get_prev_trading_date(now, PoolConf.day_count)

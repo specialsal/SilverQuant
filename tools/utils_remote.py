@@ -1,4 +1,6 @@
 import datetime
+import time
+
 import requests
 import pandas as pd
 from typing import Optional
@@ -130,13 +132,20 @@ def get_ts_daily_history(
     if not is_stock(code):
         return None
 
-    pro = get_tushare_pro()
-    df = pro.daily(
-        ts_code=code,
-        start_date=start_date,
-        end_date=end_date,
-    )
-    if len(df) > 0:
+    try_times = 0
+    df = None
+    while (df is None or len(df) <= 0) and try_times < 3:
+        pro = get_tushare_pro()
+        try:
+            df = pro.daily(
+                ts_code=code,
+                start_date=start_date,
+                end_date=end_date,
+            )
+        except:
+            time.sleep(1)
+
+    if df is not None and len(df) > 0:
         df = ts_to_standard(df)
         if columns is not None:
             return df[columns]
@@ -152,18 +161,22 @@ def get_ts_daily_histories(
     end_date: str,
     columns: list[str] = None,
 ) -> dict[str, pd.DataFrame]:
-    pro = get_tushare_pro()
+
     try_times = 0
     df = None
     while (df is None or len(df) <= 0) and try_times < 3:
-        df = pro.daily(
-            ts_code=','.join(codes),
-            start_date=start_date,
-            end_date=end_date,
-        )
+        pro = get_tushare_pro()
+        try:
+            df = pro.daily(
+                ts_code=','.join(codes),
+                start_date=start_date,
+                end_date=end_date,
+            )
+        except:
+            time.sleep(1)
 
     ans = {}
-    if len(df) > 0:
+    if df is not None and len(df) > 0:
         for code in codes:
             temp_df = df[df['ts_code'] == code]
             temp_df = ts_to_standard(temp_df)

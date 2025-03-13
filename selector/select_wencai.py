@@ -49,7 +49,7 @@ def get_wencai_codes_prices(query, debugging=False) -> dict[str, str]:
 
 
 if __name__ == '__main__':
-    a = get_wencai_codes_prices([default_prompt], debugging=True)
+    a = get_wencai_codes_prices([get_prompt()], debugging=True)
     print(a)
     i = 0
     for k in a:

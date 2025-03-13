@@ -92,6 +92,17 @@ def get_stock_codes_and_names() -> Dict[str, str]:
 # ==========
 
 
+def delete_file(path: str) -> None:
+    try:
+        if os.path.exists(path):
+            os.remove(path)
+
+        if os.path.exists(path):
+            os.unlink(path)
+    except:
+        print(f'delete {path} failed!')
+
+
 # 读取pickle缓存
 def load_pickle(path: str) -> Optional[dict]:
     if os.path.exists(path):

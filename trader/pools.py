@@ -45,8 +45,13 @@ class StockPool:
     # 删除不符合模式和没有缓存的票池
     def filter_white_list_by_selector(self, selector: Callable, cache_history: dict[str, pd.DataFrame]):
         remove_list = []
+        print('filtering...', end='')
 
+        i = 0
         for code in self.cache_whitelist:
+            i += 1
+            if i % 200 == 0:
+                print(f'{i}.', end='')
             if code in cache_history:
                 df = selector(cache_history[code], code, None)  # 预筛公式默认不需要使用quote所以传None
                 if not df['PASS'].values[-1]:
@@ -56,6 +61,8 @@ class StockPool:
 
         for code in remove_list:
             self.cache_whitelist.discard(code)
+
+        print(f'{len(remove_list)} codes filter out.')
 
         if self.ding_messager is not None:
             self.ding_messager.send_text(f'[{self.account_id}]{self.strategy_name}:筛除{len(remove_list)}支\n')
