@@ -151,9 +151,9 @@ def scan_buy(quotes: Dict, curr_date: str, positions: List) -> None:
 
     selections = []
     # 选出一个以上的股票
-    if len(selected_codes) > 0:
+    if selected_codes is not None and len(selected_codes) > 0:
         once_quotes = xt_get_ticks(selected_codes)
-        selections = check_stock_codes(selected_codes, once_quotes) if selected_codes is not None else []
+        selections = check_stock_codes(selected_codes, once_quotes)
 
     if len(selections) > 0:
         position_codes = [position.stock_code for position in positions]
