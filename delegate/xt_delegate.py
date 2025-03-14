@@ -165,7 +165,11 @@ class XtDelegate(BaseDelegate):
 
     def check_orders(self, cancelable_only = False) -> List[XtOrder]:
         if self.xt_trader is not None:
-            return self.xt_trader.query_stock_orders(self.account, cancelable_only)
+            orders = self.xt_trader.query_stock_orders(self.account, cancelable_only)
+            if cancelable_only:
+                return [order for order in orders if order.price_type not in [54, 79, 81, 91]]
+            else:
+                return orders
         else:
             raise Exception('xt_trader为空')
 
