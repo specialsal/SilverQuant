@@ -302,27 +302,33 @@ Upping Blocker: (需要历史数据) 双涨趋势阻断器
 ```
 
 ## 常见问题 Q & A
-```
 About QMT
-
+```
 如果出现程序在控制台没有持续输出，需要在QMT中检查行情源是否正确设置
+```
 
-```
-```
 About setup
-
+```
 启动之前最好重启一下系统刷新所有的软件配置
 ```
-```
-About akshare
 
-akshare会去各个官方网站抓取公开数据，网站改版会导致爬虫失效
-akshare更新比较及时，升级 akshare 版本到最新会解决一些问题
+About akshare
+```
+akshare 会去各个官方网站抓取公开数据，网站改版会导致爬虫失效
+akshare 更新比较及时，升级 akshare 版本到最新会解决一些问题
 $ pip install akshare --upgrade
 ```
-``` 
-About pywencai
 
+About tushare
+
+可以在 tushare 的官网 [tushare.pro](https://tushare.pro/register?reg=430410) 注册获得 token
+```
+tushare 作为 akshare 的备用数据源，需要配置对应的 token 才可以使用
+框架支持多个 token，请参考 reader/tushare_token_sample.py 
+```
+
+About pywencai
+``` 
 pywencai的原理是去 https://www.iwencai.com/ 抓取数据，
 记得一定要先安装 Node.js，安装完毕至少要重启PyCharm一次
 否则会报错：'NoneType' object has no attribute 'get' 
@@ -336,19 +342,19 @@ $ pip install pywencai --upgrade
 
 本项目遵循 Apache 2.0 开原许可协议
 
-* 对于代码使用过程中造成的任何损失，作者不承担任何责任
-* 对于代码改进有任何想法和建议，欢迎在 [Issues](https://github.com/silver6wings/SilverQuant/issues) 提交问题或直接提交PR修复
 * 财不入急门，强烈建议在您的策略被验证成熟之前，至少先轻仓实盘谨慎测试
+* 对于代码使用过程中造成的任何损失，作者不承担任何责任，请注意合规使用
+* 对于代码改进有任何想法和建议，欢迎在 [Issues](https://github.com/silver6wings/SilverQuant/issues) 提交问题或直接提交PR修复
 
 # 关于作者
 
-本码农是一位白天在外企搬砖的牛马，未曾供职过任何金融机构
+本作者是一位白天在外企搬砖的牛马，未曾供职过任何金融机构
 
 量化只是业余兴趣爱好，项目一定有不少瑕疵待完善，还请谅解
 
-使用过程中若遇到任何深度的问题，以及有资源有寻求合作意向
+使用过程中若遇到任何深度的问题，以及有资源寻求合作的意向
 
-欢迎联系作者 VX: `junchaoyu_`
+欢迎联系作者的 WX 工作号: `junchaoyu_`
 
 （添加的时候记得注明来意哦，亲~）
 
