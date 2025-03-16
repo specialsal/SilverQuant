@@ -8,7 +8,7 @@ from credentials import *
 from tools.utils_basic import logging_init, is_symbol
 from tools.utils_cache import *
 from tools.utils_ding import DingMessager
-from tools.utils_remote import append_ak_daily_dict, DataSource
+from tools.utils_remote import append_ak_quote_dict, DataSource
 
 from delegate.xt_subscriber import XtSubscriber, update_position_held
 
@@ -31,7 +31,7 @@ PATH_DEAL = PATH_BASE + '/deal_hist.csv'        # 记录历史成交
 PATH_HELD = PATH_BASE + '/held_days.json'       # 记录持仓日期
 PATH_MAXP = PATH_BASE + '/max_price.json'       # 记录历史最高
 PATH_LOGS = PATH_BASE + '/logs.txt'             # 用来存储选股和委托操作
-PATH_INFO = PATH_BASE + '/temp_week_{}.pkl'     # 用来缓存当天的指标信息
+PATH_INFO = PATH_BASE + '/tmp_{}.pkl'           # 用来缓存当天的指标信息
 
 lock_of_disk_cache = threading.Lock()           # 操作磁盘文件缓存的锁
 
@@ -123,8 +123,9 @@ def prepare_history() -> None:
         return
 
     now = datetime.datetime.now()
-    delete_file(PATH_INFO.format((now.isoweekday() + 1) % 7))
-    cache_path = PATH_INFO.format(now.isoweekday())
+    for i in range(15, 30):
+        delete_file(PATH_INFO.format((now - datetime.timedelta(days=i)).strftime('%Y_%m_%d')))
+    cache_path = PATH_INFO.format(now.strftime('%Y_%m_%d'))
 
     start = get_prev_trading_date(now, PoolConf.day_count)
     end = get_prev_trading_date(now, 1)
@@ -149,7 +150,7 @@ def prepare_history() -> None:
 
 
 def check_stock(code: str, quote: Dict, curr_date: str) -> (bool, Dict):
-    df = append_ak_daily_dict(my_suber.cache_history[code], quote, curr_date)
+    df = append_ak_quote_dict(my_suber.cache_history[code], quote, curr_date)
 
     result_df = select(df, code, quote)
     buy = result_df['PASS'].values[-1]

@@ -6,6 +6,7 @@ import threading
 import datetime
 from typing import List, Dict, Set, Optional
 
+import numpy as np
 import pandas as pd
 import akshare as ak
 
@@ -303,10 +304,16 @@ def get_disk_trade_day_list_and_update_max_year() -> list:
 
 
 # 获取前n个交易日，返回格式 基本格式：%Y%m%d，扩展格式：%Y-%m-%d
-def get_prev_trading_date(now: datetime.datetime, count: int, basicformat = True) -> str:
+# 如果为非交易日，则取上一个交易日为前0天
+def get_prev_trading_date(now: datetime.datetime, count: int, basic_format: bool=True) -> str:
     trading_day_list = get_disk_trade_day_list_and_update_max_year()
-    trading_index = list(trading_day_list).index(now.strftime('%Y-%m-%d'))
-    if basicformat:
+    today = now.strftime('%Y-%m-%d')
+    try:
+        trading_index = list(trading_day_list).index(today)
+    except ValueError:
+        trading_index = np.searchsorted(trading_day_list, today) - 1
+
+    if basic_format:
         return trading_day_list[trading_index - count].replace('-', '')
     else:
         return trading_day_list[trading_index - count]

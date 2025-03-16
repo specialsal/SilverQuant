@@ -32,7 +32,7 @@ PATH_DEAL = PATH_BASE + '/deal_hist.csv'        # 记录历史成交
 PATH_HELD = PATH_BASE + '/held_days.json'       # 记录持仓日期
 PATH_MAXP = PATH_BASE + '/max_price.json'       # 记录历史最高
 PATH_LOGS = PATH_BASE + '/logs.txt'             # 用来存储选股和委托操作
-PATH_INFO = PATH_BASE + '/temp_week_{}.pkl'     # 用来缓存当天的指标信息
+PATH_INFO = PATH_BASE + '/tmp_{}.pkl'           # 用来缓存当天的指标信息
 
 lock_of_disk_cache = threading.Lock()           # 操作磁盘文件缓存的锁
 
@@ -125,8 +125,9 @@ def prepare_history() -> None:
         return
 
     now = datetime.datetime.now()
-    delete_file(PATH_INFO.format((now.isoweekday() + 1) % 7))
-    cache_path = PATH_INFO.format(now.isoweekday())
+    for i in range(15, 30):
+        delete_file(PATH_INFO.format((now - datetime.timedelta(days=i)).strftime('%Y_%m_%d')))
+    cache_path = PATH_INFO.format(now.strftime('%Y_%m_%d'))
 
     start = get_prev_trading_date(now, PoolConf.day_count)
     end = get_prev_trading_date(now, 1)

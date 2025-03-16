@@ -208,6 +208,7 @@ class XtSubscriber:
         print(f'Prepared time range: {start} - {end}')
         t0 = datetime.datetime.now()
 
+        print(f'Downloading {len(target_codes)} stocks from {start} to {end} ...')
         group_size = 200
         for i in range(0, len(target_codes), group_size):
             sub_codes = [sub_code for sub_code in target_codes[i:i + group_size]]

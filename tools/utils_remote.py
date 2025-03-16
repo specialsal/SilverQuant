@@ -37,7 +37,20 @@ def pull_stock_codes(prefix: str, host: str, auth: str) -> (Optional[list[str]],
         return None, 'Unknown Error'
 
 
-def append_ak_daily_dict(source_df: pd.DataFrame, quote: dict, curr_date: str) -> pd.DataFrame:
+def append_ak_spot_dict(source_df: pd.DataFrame, row:pd.Series, curr_date: str) -> pd.DataFrame:
+    df = source_df._append({
+        'datetime': curr_date,
+        'open': row['今开'],
+        'high': row['最高'],
+        'low': row['最低'],
+        'close': row['最新价'],
+        'volume': row['成交量'],
+        'amount': row['成交额'],
+    }, ignore_index=True)
+    return df
+
+
+def append_ak_quote_dict(source_df: pd.DataFrame, quote: dict, curr_date: str) -> pd.DataFrame:
     df = source_df._append({
         'datetime': curr_date,
         'open': quote['open'],
