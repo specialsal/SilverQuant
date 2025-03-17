@@ -14,7 +14,8 @@ from tools.utils_basic import symbol_to_code
 
 trade_day_cache = {}
 trade_max_year_key = 'max_year'
-TRADE_DAY_CACHE_PATH = '_cache/_open_day_list_sina.csv'
+TRADE_DAY_CACHE_PATH = './_cache/_open_day_list_sina.csv'
+CODE_NAME_CACHE_PATH = './_cache/_code_names.csv'
 
 
 # 指数常量
@@ -66,6 +67,29 @@ class StockNames:
 
 
 # 获取股票的中文名称
+def get_stock_code_and_names_sina():
+    cache_available = False
+    df = pd.DataFrame(columns=['代码', '名称', '日期'])
+    if os.path.exists(CODE_NAME_CACHE_PATH):
+        df = pd.read_csv(CODE_NAME_CACHE_PATH)
+        cache_date_str = df['日期'].head(1).values[0]
+        cache_date = datetime.datetime.strptime(cache_date_str, '%Y-%m-%d')
+        curr_date = datetime.datetime.today()
+        if curr_date - cache_date < datetime.timedelta(days=90):
+            cache_available = True
+
+    if not cache_available:
+        df = ak.stock_zh_a_spot()
+        df = df[['代码', '名称']]
+        df['代码'] = df['代码'].str[2:]
+        df = df.sort_values(by='代码')
+        df['日期'] = datetime.datetime.today().strftime('%Y-%m-%d')
+        # print(df)
+        df.to_csv(CODE_NAME_CACHE_PATH)
+
+    return df
+
+
 def get_stock_codes_and_names() -> Dict[str, str]:
     ans = {}
 
@@ -82,7 +106,8 @@ def get_stock_codes_and_names() -> Dict[str, str]:
             arr = json.loads(line)
             ans[arr['code']] = arr['name']
 
-    df = ak.stock_zh_a_spot_em()
+    # df = ak.stock_zh_a_spot_em()
+    df = get_stock_code_and_names_sina()
     df['代码'] = df['代码'].apply(lambda x: symbol_to_code(x))
     ans.update(dict(zip(df['代码'], df['名称'])))
     return ans
