@@ -72,6 +72,7 @@ def get_stock_code_and_names_sina():
     df = pd.DataFrame(columns=['代码', '名称', '日期'])
     if os.path.exists(CODE_NAME_CACHE_PATH):
         df = pd.read_csv(CODE_NAME_CACHE_PATH)
+        df['代码'] = df['代码'].astype(str)
         cache_date_str = df['日期'].head(1).values[0]
         cache_date = datetime.datetime.strptime(cache_date_str, '%Y-%m-%d')
         curr_date = datetime.datetime.today()
