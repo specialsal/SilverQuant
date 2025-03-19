@@ -284,14 +284,12 @@ class XtDelegate(BaseDelegate):
         for order in orders:
             if order.stock_code == code and order.order_type == STOCK_BUY:
                 self.order_cancel_async(order.order_id)
-                break
 
     def order_cancel_sell(self, code: str):
         orders = self.check_orders(cancelable_only = True)
         for order in orders:
             if order.stock_code == code and order.order_type == STOCK_SELL:
                 self.order_cancel_async(order.order_id)
-                break
 
 
 def is_position_holding(position: XtPosition) -> bool:
