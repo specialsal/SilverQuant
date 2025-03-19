@@ -18,6 +18,7 @@ from trader.seller_groups import DeepseekGroupSeller as Seller
 
 from selector.selector_deepseek import select
 
+data_source = DataSource.AKSHARE
 
 STRATEGY_NAME = '金雀智选'
 DING_MESSAGER = DingMessager(DING_SECRET, DING_TOKENS)
@@ -142,7 +143,7 @@ def prepare_history() -> None:
         end=end,
         adjust=PoolConf.price_adjust,
         columns=PoolConf.columns,
-        data_source=DataSource.TUSHARE,
+        data_source=data_source
     )
 
 

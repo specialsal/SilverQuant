@@ -149,14 +149,12 @@ def get_ts_daily_history(
     df = None
     while (df is None or len(df) <= 0) and try_times < 3:
         pro = get_tushare_pro()
-        try:
-            df = pro.daily(
-                ts_code=code,
-                start_date=start_date,
-                end_date=end_date,
-            )
-        except:
-            time.sleep(1)
+        try_times += 1
+        df = pro.daily(
+            ts_code=code,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
     if df is not None and len(df) > 0:
         df = ts_to_standard(df)
@@ -179,14 +177,12 @@ def get_ts_daily_histories(
     df = None
     while (df is None or len(df) <= 0) and try_times < 3:
         pro = get_tushare_pro()
-        try:
-            df = pro.daily(
-                ts_code=','.join(codes),
-                start_date=start_date,
-                end_date=end_date,
-            )
-        except:
-            time.sleep(1)
+        try_times += 1
+        df = pro.daily(
+            ts_code=','.join(codes),
+            start_date=start_date,
+            end_date=end_date,
+        )
 
     ans = {}
     if df is not None and len(df) > 0:

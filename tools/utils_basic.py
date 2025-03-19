@@ -50,7 +50,9 @@ def logger_init(path=None) -> logging.Logger:
 
 
 # 六位数symbol代码转换成带交易所后缀code格式
-def symbol_to_code(symbol: str) -> str:
+def symbol_to_code(symbol: str|int) -> str:
+    symbol = str(symbol) if type(symbol) == int else symbol
+
     if symbol[:2] in ['00', '30', '15', '12']:
         return f'{symbol}.SZ'
     elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '11']:
@@ -71,7 +73,9 @@ def code_to_symbol(code: str) -> str:
 # ==========
 # 掘金系列代码
 # ==========
-def symbol_to_gmsymbol(symbol: str) -> str:
+def symbol_to_gmsymbol(symbol: str|int) -> str:
+    symbol = str(symbol) if type(symbol) == int else symbol
+
     if symbol[:2] in ['00', '30', '15', '12']:
         return f'SZSE.{symbol}'
     elif symbol[:2] in ['60', '68', '51', '52', '53', '56', '58', '11']:
@@ -108,26 +112,30 @@ def is_symbol(code_or_symbol: str):
 
 
 # 判断是不是股票代码
-def is_stock(code_or_symbol: str):
+def is_stock(code_or_symbol: str|int):
+    code_or_symbol = str(code_or_symbol) if type(code_or_symbol) == int else code_or_symbol
     return code_or_symbol[:2] in [
         '00', '30', '60', '68', '82', '83', '87', '88', '43', '92',
     ]
 
 
 # 判断是不是科创证券
-def is_stock_kc(code_or_symbol: str):
+def is_stock_kc(code_or_symbol: str|int):
+    code_or_symbol = str(code_or_symbol) if type(code_or_symbol) == int else code_or_symbol
     return code_or_symbol[:2] == '68'
 
 
 # 判断是不是etf代码
-def is_fund_etf(code_or_symbol: str):
+def is_fund_etf(code_or_symbol: str|int):
+    code_or_symbol = str(code_or_symbol) if type(code_or_symbol) == int else code_or_symbol
     return code_or_symbol[:2] in [
         '15', '51', '52', '53', '56', '58'
     ]
 
 
 # 判断是不是可转债
-def is_bond(code_or_symbol: str):
+def is_bond(code_or_symbol: str|int):
+    code_or_symbol = str(code_or_symbol) if type(code_or_symbol) == int else code_or_symbol
     return code_or_symbol[:2] in [
         '11', '12'
     ]
