@@ -42,7 +42,7 @@ def logger_init(path=None) -> logging.Logger:
         handler = logging.FileHandler(path)
         handler.setLevel(logging.DEBUG)
 
-        formatter = logging.Formatter('%(message)s')
+        formatter = logging.Formatter('%(asctime)s|%(message)s')
         handler.setFormatter(formatter)
 
     logger.addHandler(handler)
