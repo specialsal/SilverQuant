@@ -326,13 +326,32 @@ class XtSubscriber:
             i = 0
             for position in positions:
                 if position.volume > 0:
+                    code = position.stock_code
+                    quotes = xtdata.get_full_tick([code])
+                    curr_price = None
+                    if (code in quotes) and ('lastPrice' in quotes[code]):
+                        curr_price = quotes[code]['lastPrice']
+
+                    open_price = position.open_price
+                    vol = position.volume
+
                     i += 1
                     txt += '\n\n>'
                     txt += f'' \
-                           f'{code_to_symbol(position.stock_code)} ' \
-                           f'{self.stock_names.get_name(position.stock_code)} ' \
-                           f'{position.volume}股 ' \
-                           f'{position.open_price:.2f}元'
+                           f'{code_to_symbol(code)} ' \
+                           f'{self.stock_names.get_name(code)} ' \
+                           f'{curr_price * vol:.2f}元'
+                    txt += '\n>\n>'
+
+                    color = ''
+                    if curr_price > open_price:
+                        color = ' color="#FF0000"'
+                    if curr_price < open_price:
+                        color = ' color="#00FF00"'
+
+                    txt += f'' \
+                           f'盈亏比:<font{color}>{(curr_price / open_price - 1) * 100:.2f}%</font> ' \
+                           f'盈亏额:<font{color}>{(curr_price - open_price) * vol:.2f}</font>'
 
             title = f'{self.strategy_name} {today} 持仓 {i} 支'
             txt = title + txt
