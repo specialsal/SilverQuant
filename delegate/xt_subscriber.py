@@ -347,7 +347,7 @@ class XtSubscriber:
                     if curr_price > open_price:
                         color = ' color="#FF0000"'
                     if curr_price < open_price:
-                        color = ' color="#00FF00"'
+                        color = ' color="#007F00"'
 
                     txt += f'' \
                            f'盈亏比:<font{color}>{(curr_price / open_price - 1) * 100:.2f}%</font> ' \
