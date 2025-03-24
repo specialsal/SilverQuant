@@ -51,7 +51,9 @@ class PoolConf:
 
 class BuyConf:
     time_ranges = [['14:47', '14:57']]
-    interval = 15           # 扫描买入间隔，60的约数：1-6, 10, 12, 15, 20, 30
+
+    # wencai 尽可能时间长些，不然会被封IP
+    interval = 30           # 扫描买入间隔，60的约数：1-6, 10, 12, 15, 20, 30
     order_premium = 0.02    # 保证市价单成交的溢价，单位（元）
 
     slot_count = 10         # 持股数量上限
