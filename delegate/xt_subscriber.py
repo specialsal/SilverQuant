@@ -16,7 +16,7 @@ from tools.utils_basic import code_to_symbol
 from tools.utils_cache import check_is_open_day, get_total_asset_increase, \
     load_pickle, save_pickle, load_json, save_json, StockNames
 from tools.utils_ding import DingMessager
-from tools.utils_remote import get_daily_history, get_ts_daily_histories, DataSource
+from tools.utils_remote import get_daily_history, DataSource
 
 
 class XtSubscriber:
@@ -344,10 +344,11 @@ class XtSubscriber:
                     txt += '\n>\n>'
 
                     color = ''
+                    # （红色RGB为：220、40、50，绿色RGB为：22、188、80）
                     if curr_price > open_price:
-                        color = ' color="#FF0000"'
+                        color = ' color="#DC2832"'
                     if curr_price < open_price:
-                        color = ' color="#007F00"'
+                        color = ' color="#16BC50"'
 
                     txt += f'' \
                            f'盈亏比:<font{color}>{(curr_price / open_price - 1) * 100:.2f}%</font> ' \
