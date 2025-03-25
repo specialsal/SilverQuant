@@ -333,6 +333,9 @@ class XtSubscriber:
                         curr_price = quotes[code]['lastPrice']
 
                     open_price = position.open_price
+                    if open_price == 0.0:
+                        continue
+
                     vol = position.volume
 
                     i += 1
